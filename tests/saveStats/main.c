@@ -93,7 +93,7 @@ int main(int argc, char *argv[]) {
         char full_matrix_path[256]; // Adjust size as needed
         snprintf(full_matrix_path, sizeof(full_matrix_path), "%s/%s", "mat", matrix_names[current_matrix]);
 
-        h
+        
 
 
         struct MatriceRaw *mat;
