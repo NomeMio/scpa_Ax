@@ -83,6 +83,43 @@ int main(int argc, char *argv[]) {
 }
 
 
+int calculateHackSize2(MatriceRaw *rawMat) {
+    int R = rawMat->width;
+    int nz = rawMat->nz;
+    if (nz == 0) return 1;
+
+    // Conta non-zero per riga
+    int *row_nz = calloc(R, sizeof(int));
+    if (!row_nz) {
+        perror("calloc row_nz");
+        return R;
+    }
+    for (int k = 0; k < nz; k++) {
+        row_nz[ rawMat->iVettore[k] ]++;
+    }
+
+    // Calcola media nz per riga
+    double avg = (double)nz / R;
+    free(row_nz);
+
+    // Stima footprint per riga (dato + indice)
+    double footprint_per_row = avg * (sizeof(double) + sizeof(int));
+
+    // Legge dimensione cache L1
+    long cache_L1 = sysconf(_SC_LEVEL1_DCACHE_SIZE);
+    printf("cache L1 size: %ld\n", cache_L1);
+    //if (cache_L1 < 0) cache_L1 = 32768;  // fallback a 32KB se sconosciuta
+
+    // Calcola righe che stanno nella cache
+    int rows_in_cache = (int)(cache_L1 / footprint_per_row);
+
+    // Clamp hack tra 1 e R
+    int hack = rows_in_cache < 1 ? 1 : (rows_in_cache > R ? R : rows_in_cache);
+
+    return hack;
+}
+
+
 int calculateHackSize(MatriceRaw *rawMat) {
     int totalRows = rawMat->width;
     int nz = rawMat->nz;
@@ -147,7 +184,7 @@ int process_matrix(const char *matrix_name, const AppConfig *config,FILE * csv){
          fprintf(stderr, "Error converting %s to CSR\n", matrix_name);
          goto cleanup;
     }
-    int hack=calculateHackSize(mat);
+    int hack=calculateHackSize2(mat);
     //int hack=mat->nz/200;
     convertRawToHll(mat, hack, &matHll);
      if (!matHll) {
