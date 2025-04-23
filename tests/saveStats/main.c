@@ -8,6 +8,7 @@
 #include "stats.h"     
 #include "cuda_alex.h"
 #include "cuda_luca.h"
+#include <unistd.h>
 
 #define MAX_LINE_LENGTH 256
 #define RESULTS_PER_MATRIX 4 
