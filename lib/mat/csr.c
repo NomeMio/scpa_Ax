@@ -77,7 +77,7 @@ int convertRawToCsr(struct MatriceRaw *matricePointer, struct MatriceCsr **csrPo
     return 0;
 }
 
-int __attribute__((optimize("O0"))) serialCsrMult(struct MatriceCsr *csr, struct Vector *vec, struct Vector *result)
+int __attribute__((optimize("O3"))) serialCsrMult(struct MatriceCsr *csr, struct Vector *vec, struct Vector *result)
 {
     unsigned int nrows = vec->righe;
     for (int i = 0; i < nrows; i++)
@@ -91,7 +91,7 @@ int __attribute__((optimize("O0"))) serialCsrMult(struct MatriceCsr *csr, struct
     }
 }
 
-int parallelCsrMult(struct MatriceCsr *csr, struct Vector *vec, struct Vector *result)
+int __attribute__((optimize("O3"))) parallelCsrMult(struct MatriceCsr *csr, struct Vector *vec, struct Vector *result)
 {
     unsigned int nrows = vec->righe;
     #pragma omp parallel for schedule(static)
