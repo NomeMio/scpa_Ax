@@ -13,6 +13,7 @@ int main(int argc, char *argv[])
     }
     struct MatriceRaw *mat;
     int result = loadMatRaw(argv[1], &mat);
+    //quickSort(mat,0,mat->nz-1);
     if (result != 1)
     {
         printf("Errore leggendo la matrice");
@@ -26,8 +27,10 @@ int main(int argc, char *argv[])
         fprintf(stdout, "%d %d %20.19g\n", mat->iVettore[i], mat->jVettore[i], mat->valori[i]);
     }
 #endif
-    struct MatriceCsr *csrMatrice;
-    convertRawToCsr(mat, &csrMatrice);
+    //struct MatriceCsr *csrMatrice;
+    
+    //convertRawToCsr(mat, &csrMatrice); 
+    
 #if PRINT == 1
     printf("[ ");
     for (int i = 0; i <= csrMatrice->width; i++)
@@ -48,6 +51,13 @@ int main(int argc, char *argv[])
     }
     printf("]\n");
 #endif
-    freeMatRaw(&mat);
-    freeMatCsr(&csrMatrice);
+struct MatriceHLL *hll;
+    int error= convertRawToHll2(mat,1000,&hll);
+    if (error!=1){
+        printf("error with hll2 inizi  %d\n",error);
+        return 0;
+    };
+//printHLL(&hll);
+freeMatHll(&hll);
+freeMatRaw(&mat);
 }

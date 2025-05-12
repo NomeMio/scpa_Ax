@@ -68,7 +68,7 @@ run-test-matrici:
         echo "ERROR: MATRICE PATH is not set! put MATRICE=PATH at the end"; \
         exit 1; \
     fi
-	cd $(BUILD_DIR_TEST_MATRICI) &&  ./Main $(CURRENT_DIR)/$(MATRICE)
+	cd $(BUILD_DIR_TEST_MATRICI) && valgrind --leak-check=full ./Main $(CURRENT_DIR)/$(MATRICE)
 
 	
 
@@ -119,7 +119,7 @@ run-test-stats:
 	        echo "ERROR: ARGS PATH is not set! Use ARGS='arguments'"; exit 1; \
 	    fi; \
 	    echo "All parameters are set. Running test..."; \
-	    cd $(BUILD_DIR_STATS_TEST) && ./Main $(ARGS); \
+	    cd $(BUILD_DIR_STATS_TEST) &&  ./Main $(ARGS); \
 	}
 
 

@@ -13,6 +13,68 @@
 #include <limits.h>
 #include <errno.h>
 
+
+void swap(struct MatriceRaw *matricePointer, unsigned int indexA, unsigned int indexB) {
+    // printf("swapped %d %d\n",indexA,indexB); // Optional: for debugging
+    unsigned int tempI = matricePointer->iVettore[indexA];
+    unsigned int tempJ = matricePointer->jVettore[indexA];
+    double tempV = matricePointer->valori[indexA];
+
+    matricePointer->iVettore[indexA] = matricePointer->iVettore[indexB];
+    matricePointer->jVettore[indexA] = matricePointer->jVettore[indexB];
+    matricePointer->valori[indexA] = matricePointer->valori[indexB];
+
+    matricePointer->iVettore[indexB] = tempI;
+    matricePointer->jVettore[indexB] = tempJ;
+    matricePointer->valori[indexB] = tempV;
+}
+
+int partition(struct MatriceRaw *matricePointer, int low, int high) {
+    if (low >= high) {
+        return low;
+    }
+
+    unsigned int p1 = matricePointer->iVettore[low]; 
+    unsigned int p2 = matricePointer->jVettore[low]; 
+
+    int i = low + 1;
+    int j = high;    
+
+    while (1) {
+       
+        while (i <= high && (matricePointer->iVettore[i] < p1 || (matricePointer->iVettore[i] == p1 && matricePointer->jVettore[i] < p2))) {
+            i++;
+        }
+        while (j >= low + 1 && (matricePointer->iVettore[j] > p1 || (matricePointer->iVettore[j] == p1 && matricePointer->jVettore[j] > p2))) {
+            j--;
+        }
+
+        // If scanners have crossed or met, partitioning is done
+        if (i > j) {
+            break;
+        }
+        swap(matricePointer, i, j);
+  
+        i++;
+        j--;
+    }
+
+   swap(matricePointer, low, j); 
+    return j; 
+}
+
+void quickSort(struct MatriceRaw *matricePointer, int low, int high) {
+    if (low < high) {
+        int pi = partition(matricePointer, low, high);
+        quickSort(matricePointer, low, pi - 1);
+        quickSort(matricePointer, pi + 1, high);
+    }
+}
+
+void quickSortInterface(struct MatriceRaw *matricePointer) {
+    quickSort(matricePointer,0,matricePointer->nz-1);
+}
+
 char *resolve_symlink(const char *path) {
     char *resolved = realpath(path, NULL);
     if (resolved) {

@@ -223,12 +223,8 @@ __global__ void crs_mat_32_way(MatriceCsr *d_mat, Vector *d_vec, Vector *d_resul
 }
 
 __global__ void crs_mat_32_way_coal(MatriceCsr * __restrict__ d_mat, Vector * __restrict__ d_vec, Vector *d_result) {
-    int id = blockIdx.x * blockDim.x + threadIdx.x; // id
-    int realRow = id >> 5; // Check row number dividing id % number of thread per warp 2^5
-     // get position inside warp
-
-     //exit if id is outisde of lines range
-
+    int id = blockIdx.x * blockDim.x + threadIdx.x; 
+    int realRow = id >> 5; 
     const int2* input_vec_ptr = reinterpret_cast<const int2*>(d_mat->iRP);
     int2 loaded_ints = input_vec_ptr[realRow];
     int base = loaded_ints.x; //start of array

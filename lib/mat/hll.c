@@ -7,7 +7,6 @@
 #define DEBUG 0
 
 
-
 int convertRawToHll(struct MatriceRaw *matricePointer, int hackSizeP, struct MatriceHLL **hllP)
 {
     int totalRows = matricePointer->height;
@@ -130,6 +129,94 @@ int convertRawToHll(struct MatriceRaw *matricePointer, int hackSizeP, struct Mat
 
     return 1; // Successo
 }
+
+int convertRawToHll2(struct MatriceRaw *matricePointer, int hackSizeP, struct MatriceHLL **hllP)
+{
+    int totalRows = matricePointer->height;
+    int totalCols = matricePointer->width;
+    int hackSize = hackSizeP;
+    int numBlocks = (totalRows + hackSize - 1) / hackSize; // arrotondamento per eccesso
+    quickSortInterface(matricePointer);
+#if DEBUG == 0
+    printf("DEBUG: totalRows=%d, totalCols=%d, hackSize=%d, numBlocks=%d\n", totalRows, totalCols, hackSize, numBlocks);
+#endif
+    // Allocazione della struttura HLL
+    struct MatriceHLL *hll = malloc(sizeof(struct MatriceHLL));
+    if (hll == NULL)
+    {
+        fprintf(stderr, "Errore di allocazione per MatriceHLL.\n");
+        return -1;
+    }
+    *hllP = hll;
+
+    hll->totalRows = totalRows;
+    hll->totalCols = totalCols;
+    hll->HackSize = hackSize;
+    hll->numBlocks = numBlocks;
+    hll->blocks = malloc(numBlocks * sizeof(ELLPACK_Block *));
+    //unsigned int  *maxNN=calloc(numBlocks,sizeof(unsigned int));
+    if (hll->blocks == NULL)
+    {
+        fprintf(stderr, "Errore di allocazione per l'array dei blocchi.\n");
+        free(hll);
+        return -2;
+    }
+    unsigned int blockATT=0;
+    int k=0;
+    unsigned int nz=matricePointer->nz;
+    while(blockATT<numBlocks){
+            int maxNN=0;
+            int indexI=k;
+
+            for(int riga=0;riga<hackSize;riga++){
+                int maxL=0;
+                while(1){
+                    if( indexI>=nz || matricePointer->iVettore[indexI]!=riga+blockATT*hackSize ) break;
+                    maxL+=1;
+                    indexI++;
+                }
+                maxNN=maxL>maxNN?maxL:maxNN;
+            }
+            //unsigned int index=k/hackSize;
+            hll->blocks[blockATT] = malloc(sizeof(ELLPACK_Block));
+            if (hll->blocks[blockATT] == NULL)
+            {
+            fprintf(stderr, "Errore di allocazione per il blocco %d.\n", blockATT);
+            // Liberare quelli allocati finora e hll
+            return -3;
+            }
+            ELLPACK_Block *b=hll->blocks[blockATT];
+            b->MAXNZ=maxNN;
+            b->M=hackSize;
+            b->N=matricePointer->width;
+            //printf("blockATT %d maxnn %d\n",blockATT,maxNN);
+            b->JA=calloc(maxNN*hackSize,sizeof(int));
+            b->AS=calloc(maxNN*hackSize,sizeof(double));
+            if ( b->JA == NULL || b->AS == NULL)
+            {
+                fprintf(stderr, "Errore di allocazione per AS JA.\n");
+                return -1;
+            }
+
+            for(int riga=0;riga<hackSize;riga++){
+                int tempCounter=0;
+                if(k>=nz){
+                   b->M=riga;
+                   break; 
+                }              
+                while(1){
+                    if(k>=nz || matricePointer->iVettore[k]!=riga+blockATT*hackSize ) break;
+                    b->JA[riga*maxNN+tempCounter]=matricePointer->jVettore[k];
+                    b->AS[riga*maxNN+tempCounter]=matricePointer->valori[k];
+                    k++;
+                    tempCounter++;
+                }
+            }
+        blockATT++;
+        }
+    return 1;
+}
+
 
 int convertRawToEllpack(struct MatriceRaw *matricePointer, int acksize, ELLPACK_Block **block_)
 {
@@ -340,7 +427,7 @@ int  hllMultWithTime(int (*multiplayer)(struct MatriceHLL *, struct Vector *, st
     return retunrE;
 }
 
-int __attribute__((optimize("O3"))) openMpMultiplyHLL(struct MatriceHLL *mat, struct Vector *vec, struct Vector *result)
+int __attribute__((optimize("O2"))) openMpMultiplyHLL(struct MatriceHLL *mat, struct Vector *vec, struct Vector *result)
 {
 
     if (!mat || !vec || !result)

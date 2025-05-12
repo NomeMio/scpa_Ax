@@ -28,7 +28,8 @@ typedef struct MatriceRaw {
     unsigned int *jVettore;
     double *valori;
 } MatriceRaw;
-
+void quickSort(struct MatriceRaw *matricePointer, int low, int high);
+void quickSortInterface(struct MatriceRaw *matricePointer);
 int loadMatRaw(char *filePath, MatriceRaw **matricePointer);
 int freeMatRaw(MatriceRaw **matricePointer);
 
@@ -76,7 +77,7 @@ typedef struct FlatELLMatrix {
     int     total_values;      // Numero totale di elementi (lunghezza degli array flat)
     int     numBlocks;         // Numero di blocchi
 } FlatELLMatrix;
-
+int convertRawToHll2(struct MatriceRaw *matricePointer, int hackSizeP, struct MatriceHLL **hllP);
 int convertRawToEllpack(MatriceRaw *matricePointer, int hackSize, ELLPACK_Block **block);
 int convertRawToHll(MatriceRaw *matricePointer, int hackSizeP, MatriceHLL **hll);
 int serialMultiplyHLL(MatriceHLL *mat, Vector *vec, Vector *result);

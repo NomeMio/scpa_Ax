@@ -2,7 +2,7 @@
 extern "C" {
 #endif
 
-
+void freeFlatHLL(FlatELLMatrix **flatMat);
 int convertHLLToFlatELL(MatriceHLL **H, FlatELLMatrix **flatMat);
 void printFlatELLMatrix(FlatELLMatrix **flatMat);
 int invokeKernel1( Vector *vect,

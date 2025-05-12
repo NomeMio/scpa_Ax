@@ -8,7 +8,16 @@
 #define WARP_SIZE 32
 
 #define DEBUG 0
+  
+void freeFlatHLL(FlatELLMatrix **flatMat){
+    struct FlatELLMatrix *mat=*flatMat;
+    free(mat->values_flat);
+    free(mat->col_indices_flat);
+    free(mat->block_offsets);
+    free(mat->block_nnz);
+    free(mat->block_rows);
 
+}
 int convertHLLToFlatELL(MatriceHLL **H, FlatELLMatrix **flatMat)
 {
     // Allocazione della struttura FlatELLMatrix

@@ -464,11 +464,21 @@ for(unsigned int  j=32;j<257;j=j*2){
     freeRandom(&resultV); 
 }
 
-
+printf("finished\n");
 cleanup:
-    freeMatHll(&matHll);   // Safe if matHll is NULL
-    freeMatCsr(&csrMatrice);// Safe if csrMatrice is NULL
-    freeMatRaw(&mat);   
+    printf("cleanup\n");
+    fflush(stdout);
+    //freeFlatHLL(&cudaHllMat);
+    printf("cleanup2\n");
+    fflush(stdout);
+    freeMatHll(&matHll);  
+    printf("cleanup3\n");
+    fflush(stdout);
+    freeMatCsr(&csrMatrice);
+        printf("cleanu4\n");
+        fflush(stdout);
+// Safe if csrMatrice is NULL
+    //freeMatRaw(&mat);   
 return status;
 }
 
