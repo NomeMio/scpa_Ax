@@ -187,7 +187,7 @@ int process_matrix(const char *matrix_name, const AppConfig *config,FILE * csv){
     }
     int hack=calculateHackSize2(mat);
     //int hack=mat->nz/200;
-    convertRawToHll(mat, hack, &matHll);
+    convertRawToHll2(mat, hack, &matHll);
      if (!matHll) {
           fprintf(stderr, "Error converting %s to HLL (block length %d)\n", matrix_name, hack);
           goto cleanup;
@@ -468,17 +468,14 @@ printf("finished\n");
 cleanup:
     printf("cleanup\n");
     fflush(stdout);
-    //freeFlatHLL(&cudaHllMat);
-    printf("cleanup2\n");
-    fflush(stdout);
+    freeFlatHLL(&cudaHllMat);
+
     freeMatHll(&matHll);  
-    printf("cleanup3\n");
-    fflush(stdout);
+
     freeMatCsr(&csrMatrice);
-        printf("cleanu4\n");
-        fflush(stdout);
+
 // Safe if csrMatrice is NULL
-    //freeMatRaw(&mat);   
+    freeMatRaw(&mat);   
 return status;
 }
 

@@ -4,7 +4,13 @@
 #include "matriciOpp.h"
 #include "cuda_alex.h"
 #include <cstdint>
+#define DEBUG 0
 
+int debug=0;
+
+#if DEBUG == 1
+    debug=1;
+#endif
 
 #include <cuda_runtime.h>
 #include <stdio.h>
@@ -23,7 +29,7 @@
 #define CUDA_MALLOC(ptr, size)                                  \
     do {                                                         \
         CUDA_CHECK(cudaMalloc((void**)&ptr, (size)));            \
-            fprintf(stderr,"Allocated %lu bytes at %p [%s:%d]\n",        \
+            if(debug==1)fprintf(stderr,"Allocated %lu bytes at %p [%s:%d]\n",        \
                    (size_t)(size), (void*)(ptr), __FILE__, __LINE__); \
     } while (0)
 
@@ -33,7 +39,7 @@
     do {                                                     \
         if ((ptr) != NULL) {                                 \
             CUDA_CHECK(cudaFree(ptr));                       \
-            fprintf(stderr,"Freed memory at %p [%s:%d]\n",           \
+            if(debug==1)fprintf(stderr,"Freed memory at %p [%s:%d]\n",           \
                    (void*)(ptr), __FILE__, __LINE__);        \
             (ptr) = NULL;  /* Avoid dangling pointer */      \
         }                                                   \
@@ -43,7 +49,7 @@
 #define CUDA_MEMCPY(dst, src, size, direction)                           \
     do {                                                                 \
         CUDA_CHECK(cudaMemcpy((dst), (src), (size), (direction)));       \
-        fprintf(stderr,"[CUDA MEMCPY] %lu bytes from %p to %p (Dir: %d) [%s:%d]\n", \
+        if(debug==1)fprintf(stderr,"[CUDA MEMCPY] %lu bytes from %p to %p (Dir: %d) [%s:%d]\n", \
                (size_t)(size), (void*)(src), (void*)(dst), (direction), __FILE__, __LINE__); \
     } while (0)
 

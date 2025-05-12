@@ -124,7 +124,7 @@ int loadMatRaw(char *filePath, struct MatriceRaw ** matricePointer)
     int ret_code;
     MM_typecode matcode;
     FILE *f;
-    unsigned long int M, N, nz;   
+    unsigned long int M, N, nz=0;   
     filePath=resolve_symlink(filePath);
     printf("%s\n",filePath);
     if ((f = fopen(filePath, "r")) == NULL) {
@@ -214,8 +214,6 @@ int loadMatRaw(char *filePath, struct MatriceRaw ** matricePointer)
 
              }
      }
-     printf("Debug 8: letto tutto\n");
-
 
 
     if (f !=stdin) fclose(f);
@@ -273,8 +271,6 @@ int loadMatRaw(char *filePath, struct MatriceRaw ** matricePointer)
         matrice->valori = new_val;
         matrice->nz = new_nz;
     }
-
-     printf("Debug 8: letto tutto\n");
 
 
     /************************/
