@@ -68,7 +68,7 @@ run-test-matrici:
         echo "ERROR: MATRICE PATH is not set! put MATRICE=PATH at the end"; \
         exit 1; \
     fi
-	cd $(BUILD_DIR_TEST_MATRICI) && valgrind --leak-check=full --track-origins=yes -s ./Main $(CURRENT_DIR)/$(MATRICE)
+	cd $(BUILD_DIR_TEST_MATRICI) && ./Main $(CURRENT_DIR)/$(MATRICE)
 
 	
 

@@ -1,8 +1,17 @@
 
 #define PRINT 0
+#include <omp.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include "matriciOpp.h"
+#include <string.h>
+#include <errno.h>
+#include <limits.h>
+#include "matriciOpp.h" 
+#include "stats.h"     
+#include "cuda_alex.h"
+#include "cuda_luca.h"
+#include <unistd.h>
+
 int main(int argc, char *argv[])
 {
 
@@ -57,7 +66,11 @@ struct MatriceHLL *hll;
         printf("error with hll2 inizi  %d\n",error);
         return 0;
     };
-//printHLL(&hll);
+printHLL(&hll);
+FlatELLMatrix *flat;
+convertHLLToFlatELL(&hll,&flat);
+printFlatELLMatrix(&flat);
 freeMatHll(&hll);
+
 freeMatRaw(&mat);
 }

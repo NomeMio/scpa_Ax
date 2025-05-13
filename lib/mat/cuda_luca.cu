@@ -91,6 +91,9 @@ int convertHLLToFlatELL(MatriceHLL **H, FlatELLMatrix **flatMat)
     return 0;
 }
 
+
+
+
 void printFlatELLMatrix(FlatELLMatrix **flatMat)
 {
     if (flatMat == NULL || *flatMat == NULL)
@@ -249,7 +252,65 @@ __global__ void matvec_flatell_kernel_v3(FlatELLMatrix *dMat, double *x, double 
     }
 }
 
+__global__ void matvec_flatell_kernel_v3(FlatELLMatrix *dMat, double *x, double *y, int hack_size,int total_blocks) {
 
+    int thread_id = blockIdx.x * blockDim.x + threadIdx.x;  // ID del thread
+    int warp_id = thread_id >> 5;  // Ogni warp lavora su una riga (thread_id / 32)
+    int lane = thread_id & 31;     // ID del thread dentro la warp (0-31)
+
+
+    if (warp_id >= total_blocks) return;
+
+
+    int local_row = warp_id % hack_size;
+    int rows_in_block = dMat->block_rows[block_id];
+
+    if (local_row >= rows_in_block) return;  // Assicurarsi che non si esca dai limiti della riga
+
+    int block_start = dMat->block_offsets[block_id];  // Offset del blocco
+    int max_nnz_per_row = dMat->block_nnz[block_id]; // Max NNZ per riga nel blocco
+    double sum = 0.0;
+
+    for (int j = lane; j < max_nnz_per_row; j += 32) {
+        
+        int flat_idx = block_start + j * rows_in_block + local_row;
+
+        int col = dMat->col_indices_flat[flat_idx];
+
+        // Controlla se è un padding (spesso indicato con col < 0)
+        if (col >= 0) {
+            double val = dMat->values_flat[flat_idx];
+            sum += val * x[col]; // Accumula il prodotto
+        }
+    }
+
+    int width=32;
+    // Riduzione a livello di warp per sommare i risultati parziali
+    for (int offset = width >> 1; offset > 0; offset >>= 1) {
+        sum += __shfl_down_sync(0xFFFFFFFF, sum, offset,width);
+    }
+
+    // Il primo thread della warp scrive il risultato finale
+    if (lane == 0) {
+        y[warp_id] = sum;
+    }
+}
+
+int * allocVectorGpuInt(Vector *vect){
+    int *d_vettore;
+    int righex=vect->righe;
+    cudaMalloc((void**)&d_vettore, sizeof(int) * vect->righe);
+    cudaMemcpy(d_vettore, vect->vettore, sizeof(int) * vect->righe, cudaMemcpyHostToDevice);
+    return d_vettore;    
+}
+
+double * allocVectorGpuDouble(Vector *vect){
+    double *d_vettore;
+    int righex=vect->righe;
+    cudaMalloc((void**)&d_vettore, sizeof(double) * vect->righe);
+    cudaMemcpy(d_vettore, vect->vettore, sizeof(double) * vect->righe, cudaMemcpyHostToDevice);
+    return d_vettore;    
+}
 
 
 int invokeKernel1(struct Vector *vect,
@@ -291,33 +352,12 @@ int invokeKernel1(struct Vector *vect,
         cudaMemcpy(d_mat, &cudaHllMatG, sizeof(struct FlatELLMatrix), cudaMemcpyHostToDevice);
 
         
-        double *d_vettore;
-        int righex=vect->righe;
-        cudaMalloc((void**)&d_vettore, sizeof(double) * vect->righe);
-        cudaMemcpy(d_vettore, vect->vettore, sizeof(double) * vect->righe, cudaMemcpyHostToDevice);
-        double *temp=vect->vettore;
-
-        //vect->vettore = d_vettore;
-
-        //struct Vector *d_vect;
-        //cudaMalloc((void**)&d_vect, sizeof(struct Vector));
-        //cudaMemcpy(d_vect, vect, sizeof(struct Vector), cudaMemcpyHostToDevice);
-
+        //double *temp=vect->vettore;
 
         double *d_result_vettore;
         cudaMalloc((void**)&d_result_vettore, sizeof(double) * result->righe);
         cudaMemcpy(d_result_vettore, result->vettore, sizeof(double) * vect->righe, cudaMemcpyHostToDevice);
 
-
-        //result->vettore = d_result_vettore;
-
-        
-        //struct Vector *d_result;
-        //cudaMalloc((void**)&d_result, sizeof(struct Vector));
-        //cudaMemcpy(d_result, result, sizeof(struct Vector), cudaMemcpyHostToDevice);
-        //result->vettore = temp;
-
-    
         int *d_numBlocks;
         cudaMalloc(&d_numBlocks, sizeof(int));
         cudaMemcpy(d_numBlocks, &cudaHllMat->numBlocks, sizeof(int), cudaMemcpyHostToDevice);
