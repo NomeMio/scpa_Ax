@@ -170,6 +170,7 @@ int process_matrix(const char *matrix_name, const AppConfig *config,FILE * csv){
         fprintf(stderr, "Error reading matrix: %s\n", full_matrix_path);
         goto cleanup; // Use goto for centralized cleanup within this function
     }
+   quickSortInterface(mat);
 
     int rows=mat->height;
     int seed=1;
@@ -407,8 +408,11 @@ for(unsigned int  j=32;j<257;j=j*2){
         
         append_csv_entry(csv,&result);
     }
+
     freeRandom(&resultV); 
 }
+            printf("executed kernel1 hll\n");
+
 //------------------------------CUDA HLL  2-----------------------------//
 for(unsigned int  j=32;j<129;j=j*2){
     struct CsvEntry result;
@@ -434,8 +438,11 @@ for(unsigned int  j=32;j<129;j=j*2){
         
         append_csv_entry(csv,&result);
     }
+
     freeRandom(&resultV); 
 }
+            printf("executed kernel2 hll\n");
+
 //------------------------------CUDA HLL  3-----------------------------//
 for(unsigned int  j=32;j<257;j=j*2){
     struct CsvEntry result;
@@ -461,20 +468,70 @@ for(unsigned int  j=32;j<257;j=j*2){
         
         append_csv_entry(csv,&result);
     }
+
     freeRandom(&resultV); 
 }
+            printf("executed kernel3 hll\n");
+
+freeFlatHLL(&cudaHllMat);
+freeMatHll(&matHll);  
+/////////////////// HLL WARP A 32 HACKSIZE
+
+matHll=NULL;
+cudaHllMat=NULL;
+convertRawToHll2(mat, 32, &matHll);
+     if (!matHll) {
+          fprintf(stderr, "Error converting %s to HLL (block length %d)\n", matrix_name, hack);
+          goto cleanup;
+     }
+flatHll = convertHLLToFlatELL(&matHll, &cudaHllMat);
+if (flatHll != 0){
+        printf("Error while converting to flat format result vector\n");
+        return flatHll;
+}
+//printFlatELLMatrix(&cudaHllMat);
+
+//printHLL(&matHll);
+fflush(stdout);
+//------------------------------CUDA HLL  WARP COLONNE-----------------------------//
+for(unsigned int  j=32;j<257;j=j*2){
+    struct CsvEntry result;
+    struct Vector *resultV;
+    generateEmpty(rows, &resultV);
+    initializeCsvEntry(&result, matrix_name, "hll", "cuda","kernel warp colonne",mat->nz, 32, mat->height,j ,iterations,0.0,0.0);
+    
+    double time = 0;
+    for (int i = 0; i < iterations; i++) {
+        int result_ = invokeKernelWarpColonne(vectorR, resultV, cudaHllMat, matHll, 32, &time,j);
+        if(result_!=0){
+           printf("kernel 1 crashed\n");
+            exit(1);
+        }
+        result.measure[i] = 2.0 * mat->nz / (time * 1000000000);
+    }
+    if(areVectorsEqual(resultV,resultSerial)!=0){
+        printf("result hll  is borken for kernel colonne warp\n");
+    }else{
+        double diff;
+        double percentage;
+        calculate_vector_differences(resultV,resultSerial,&diff,&percentage);
+        
+        append_csv_entry(csv,&result);
+    }
+
+    freeRandom(&resultV); 
+}
+
+            printf("executed kernel colonne warp hll\n");
+
 
 printf("finished\n");
 cleanup:
     printf("cleanup\n");
     fflush(stdout);
     freeFlatHLL(&cudaHllMat);
-
-    freeMatHll(&matHll);  
-
+    freeMatHll(&matHll); 
     freeMatCsr(&csrMatrice);
-
-// Safe if csrMatrice is NULL
     freeMatRaw(&mat);   
 return status;
 }

@@ -136,7 +136,6 @@ int convertRawToHll2(struct MatriceRaw *matricePointer, int hackSizeP, struct Ma
     int totalCols = matricePointer->width;
     int hackSize = hackSizeP;
     int numBlocks = (totalRows + hackSize - 1) / hackSize; // arrotondamento per eccesso
-    quickSortInterface(matricePointer);
 #if DEBUG == 0
     printf("DEBUG: totalRows=%d, totalCols=%d, hackSize=%d, numBlocks=%d\n", totalRows, totalCols, hackSize, numBlocks);
 #endif
@@ -214,6 +213,7 @@ int convertRawToHll2(struct MatriceRaw *matricePointer, int hackSizeP, struct Ma
             }
         blockATT++;
         }
+    printf("finished parsing hll matrix\n");
     return 1;
 }
 

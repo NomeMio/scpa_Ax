@@ -14,6 +14,9 @@ int invokeKernel2( Vector *vect,
 int invokeKernel3( Vector *vect,
      Vector *result,
      FlatELLMatrix *cudaHllMat,  MatriceHLL *matHll,int hack, double *time,int blockS );
+     int invokeKernelWarpColonne(struct Vector *vect,
+    struct Vector *result,
+    struct FlatELLMatrix *cudaHllMat, struct MatriceHLL *matHll,int hack,double* time,int blockS );
     
 #ifdef __cplusplus
 }

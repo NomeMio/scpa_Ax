@@ -74,6 +74,7 @@ typedef struct FlatELLMatrix {
     int*    block_offsets;     // Offset di inizio di ogni blocco
     int*    block_nnz;         // Numero massimo di non zero per riga per ogni blocco (MAXNZ)
     int*    block_rows;        // Numero di righe effettive per ogni blocco
+    int hack;
     int     total_values;      // Numero totale di elementi (lunghezza degli array flat)
     int     numBlocks;         // Numero di blocchi
 } FlatELLMatrix;

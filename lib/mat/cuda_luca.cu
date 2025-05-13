@@ -49,6 +49,8 @@ int convertHLLToFlatELL(MatriceHLL **H, FlatELLMatrix **flatMat)
     (*flatMat)->block_offsets = (int *)malloc(numBlocks * sizeof(int));
     (*flatMat)->block_nnz = (int *)malloc(numBlocks * sizeof(int));
     (*flatMat)->block_rows = (int *)malloc(numBlocks * sizeof(int));
+    (*flatMat)->hack = (*H)->HackSize;
+
 
     if (!(*flatMat)->values_flat || !(*flatMat)->col_indices_flat ||
         !(*flatMat)->block_offsets || !(*flatMat)->block_nnz || !(*flatMat)->block_rows)
@@ -87,6 +89,7 @@ int convertHLLToFlatELL(MatriceHLL **H, FlatELLMatrix **flatMat)
         }
         offset += M * MAXNZ;
     }
+    printf("finished parsing hll flat matrix\n");
 
     return 0;
 }
@@ -130,7 +133,7 @@ void printFlatELLMatrix(FlatELLMatrix **flatMat)
         printf("\n");
     }
 }
-__global__ void matvec_flatell_kernel(FlatELLMatrix *dMat, double *x, double *y, int hack_size) {
+__global__ void matvec_flatell_kernel(struct FlatELLMatrix *dMat, double *x, double *y, int hack_size) {
     int global_row = blockIdx.x * blockDim.x + threadIdx.x; 
 
     
@@ -251,51 +254,33 @@ __global__ void matvec_flatell_kernel_v3(FlatELLMatrix *dMat, double *x, double 
         y[warp_id] = sum;
     }
 }
-
-__global__ void matvec_flatell_kernel_v3(FlatELLMatrix *dMat, double *x, double *y, int hack_size,int total_blocks) {
+__global__ void matvec_flatell_kernel_warpCOlonne(FlatELLMatrix *dMat, double *x, double *y, int hack_size,int total_blocks) {
 
     int thread_id = blockIdx.x * blockDim.x + threadIdx.x;  // ID del thread
-    int warp_id = thread_id >> 5;  // Ogni warp lavora su una riga (thread_id / 32)
-    int lane = thread_id & 31;     // ID del thread dentro la warp (0-31)
-
-
-    if (warp_id >= total_blocks) return;
-
-
-    int local_row = warp_id % hack_size;
-    int rows_in_block = dMat->block_rows[block_id];
-
-    if (local_row >= rows_in_block) return;  // Assicurarsi che non si esca dai limiti della riga
-
-    int block_start = dMat->block_offsets[block_id];  // Offset del blocco
-    int max_nnz_per_row = dMat->block_nnz[block_id]; // Max NNZ per riga nel blocco
+    int warp_id = thread_id >> 5; 
+    int lane = thread_id & 31;    
+    if (warp_id >= total_blocks ) return; 
+    int row=dMat->block_rows[warp_id];
+    if(row<=lane)return;
+    int block_start = dMat->block_offsets[warp_id];  // Offset del blocco
+    int max_nnz_per_row = dMat->block_nnz[warp_id]; // Max NNZ per riga nel blocco
     double sum = 0.0;
+    for (int j = 0; j < max_nnz_per_row-1  ; j += 1) {
+        int flat_idx = block_start + j * row + lane;
 
-    for (int j = lane; j < max_nnz_per_row; j += 32) {
-        
-        int flat_idx = block_start + j * rows_in_block + local_row;
-
-        int col = dMat->col_indices_flat[flat_idx];
-
-        // Controlla se è un padding (spesso indicato con col < 0)
-        if (col >= 0) {
-            double val = dMat->values_flat[flat_idx];
-            sum += val * x[col]; // Accumula il prodotto
-        }
+        int col = dMat->col_indices_flat[flat_idx]; //evitabile?
+        double molt=x[col];
+        double val = dMat->values_flat[flat_idx];
+        sum += val *  molt;// Accumula il prodotto
     }
-
-    int width=32;
-    // Riduzione a livello di warp per sommare i risultati parziali
-    for (int offset = width >> 1; offset > 0; offset >>= 1) {
-        sum += __shfl_down_sync(0xFFFFFFFF, sum, offset,width);
-    }
-
-    // Il primo thread della warp scrive il risultato finale
-    if (lane == 0) {
-        y[warp_id] = sum;
-    }
+    int flat_idx = block_start + (max_nnz_per_row-1) * row + lane;
+    
+    int col = dMat->col_indices_flat[flat_idx]; //evitabile?
+    double molt=x[col];
+    double val = dMat->values_flat[flat_idx];
+    sum += val *  molt;// Accumula il prodotto
+    y[hack_size*warp_id+lane]=sum;
 }
-
 int * allocVectorGpuInt(Vector *vect){
     int *d_vettore;
     int righex=vect->righe;
@@ -304,94 +289,125 @@ int * allocVectorGpuInt(Vector *vect){
     return d_vettore;    
 }
 
+typedef struct FlatEllAllocated{
+    struct FlatELLMatrix * gpu;
+    struct FlatELLMatrix * pointersToGpu;
+}FlatEllAllocated;
+
+// Funzione per controllare gli errori CUDA e terminare in caso di fallimento
+static void HandleCudaError(cudaError_t err, const char *file, int line) {
+    if (err != cudaSuccess) {
+        fprintf(stderr, "%s in %s at line %d\n", cudaGetErrorString(err), file, line);
+        exit(EXIT_FAILURE);
+    }
+}
+#define HANDLE_CUDA_ERROR(err) (HandleCudaError(err, __FILE__, __LINE__))
+
 double * allocVectorGpuDouble(Vector *vect){
     double *d_vettore;
-    int righex=vect->righe;
-    cudaMalloc((void**)&d_vettore, sizeof(double) * vect->righe);
-    cudaMemcpy(d_vettore, vect->vettore, sizeof(double) * vect->righe, cudaMemcpyHostToDevice);
-    return d_vettore;    
+    cudaError_t err;
+
+    err = cudaMalloc((void**)&d_vettore, sizeof(double) * vect->righe);
+    HANDLE_CUDA_ERROR(err);
+
+    err = cudaMemcpy(d_vettore, vect->vettore, sizeof(double) * vect->righe, cudaMemcpyHostToDevice);
+    HANDLE_CUDA_ERROR(err);
+
+    return d_vettore;
+}
+
+struct FlatEllAllocated allocateFlatHll(struct FlatELLMatrix *cudaHllMat){
+    cudaError_t err;
+    double *d_values_flat;
+    err = cudaMalloc((void**)&d_values_flat, sizeof(double) * cudaHllMat->total_values);
+    HANDLE_CUDA_ERROR(err);
+    err = cudaMemcpy(d_values_flat, cudaHllMat->values_flat, sizeof(double) * cudaHllMat->total_values, cudaMemcpyHostToDevice);
+    HANDLE_CUDA_ERROR(err);
+
+    int *d_col_indices_flat;
+    err = cudaMalloc((void**)&d_col_indices_flat, sizeof(int) * cudaHllMat->total_values);
+    HANDLE_CUDA_ERROR(err);
+    err = cudaMemcpy(d_col_indices_flat, cudaHllMat->col_indices_flat, sizeof(int) * cudaHllMat->total_values, cudaMemcpyHostToDevice);
+    HANDLE_CUDA_ERROR(err);
+
+    int *d_block_offsets;
+    err = cudaMalloc((void**)&d_block_offsets, sizeof(int) * cudaHllMat->numBlocks);
+    HANDLE_CUDA_ERROR(err);
+    err = cudaMemcpy(d_block_offsets, cudaHllMat->block_offsets, sizeof(int) * cudaHllMat->numBlocks, cudaMemcpyHostToDevice);
+    HANDLE_CUDA_ERROR(err);
+
+    int *d_block_nnz;
+    err = cudaMalloc((void**)&d_block_nnz, sizeof(int) * cudaHllMat->numBlocks);
+    HANDLE_CUDA_ERROR(err);
+    err = cudaMemcpy(d_block_nnz, cudaHllMat->block_nnz, sizeof(int) * cudaHllMat->numBlocks, cudaMemcpyHostToDevice);
+    HANDLE_CUDA_ERROR(err);
+
+    int *d_block_rows;
+    err = cudaMalloc((void**)&d_block_rows, sizeof(int) * cudaHllMat->numBlocks);
+    HANDLE_CUDA_ERROR(err);
+    err = cudaMemcpy(d_block_rows, cudaHllMat->block_rows, sizeof(int) * cudaHllMat->numBlocks, cudaMemcpyHostToDevice);
+    HANDLE_CUDA_ERROR(err);
+
+    struct FlatELLMatrix *cudaHllMatG;
+    cudaHllMatG = (struct FlatELLMatrix *)malloc(sizeof(struct FlatELLMatrix));
+    if (cudaHllMatG == NULL) {
+        fprintf(stderr, "Errore di allocazione memoria host per cudaHllMatG in %s at line %d\n", __FILE__, __LINE__);
+        exit(EXIT_FAILURE);
+    }
+    cudaHllMatG->values_flat    = d_values_flat;
+    cudaHllMatG->col_indices_flat = d_col_indices_flat;
+    cudaHllMatG->block_offsets  = d_block_offsets;
+    cudaHllMatG->block_nnz      = d_block_nnz;
+    cudaHllMatG->block_rows     = d_block_rows;
+    cudaHllMatG->hack           = cudaHllMat->hack;
+    cudaHllMatG->total_values   = cudaHllMat->total_values;
+    cudaHllMatG->numBlocks      = cudaHllMat->numBlocks;
+
+    struct FlatELLMatrix *d_mat;
+    err = cudaMalloc((void**)&d_mat, sizeof(struct FlatELLMatrix));
+    HANDLE_CUDA_ERROR(err);
+    err = cudaMemcpy(d_mat, cudaHllMatG, sizeof(struct FlatELLMatrix), cudaMemcpyHostToDevice);
+    HANDLE_CUDA_ERROR(err);
+
+    return (struct FlatEllAllocated) {.gpu=d_mat,.pointersToGpu=cudaHllMatG};
 }
 
 
 int invokeKernel1(struct Vector *vect,
         struct Vector *result,
-        struct FlatELLMatrix *cudaHllMat, struct MatriceHLL *matHll,int hack, double *time ,int blockS){
+        struct FlatELLMatrix *cudaHllMat, struct MatriceHLL *matHll,int hack, double *time ,int blockS){ //TODO:da togliere matrice hll
 
         cudaEvent_t start,stop;
         
-        double *d_values_flat;
-        cudaMalloc((void**)&d_values_flat, sizeof(double) * cudaHllMat->total_values);
-        cudaMemcpy(d_values_flat, cudaHllMat->values_flat, sizeof(double) * cudaHllMat->total_values, cudaMemcpyHostToDevice);
-
-        int *d_col_indices_flat;
-        cudaMalloc((void**)&d_col_indices_flat, sizeof(int) * cudaHllMat->total_values);
-        cudaMemcpy(d_col_indices_flat, cudaHllMat->col_indices_flat, sizeof(int) * cudaHllMat->total_values, cudaMemcpyHostToDevice);
-
-        int *d_block_offsets;
-        cudaMalloc((void**)&d_block_offsets, sizeof(int) * cudaHllMat->numBlocks);
-        cudaMemcpy(d_block_offsets, cudaHllMat->block_offsets, sizeof(int) * cudaHllMat->numBlocks, cudaMemcpyHostToDevice);
-    
-        int *d_block_nnz;
-        cudaMalloc((void**)&d_block_nnz, sizeof(int) * cudaHllMat->numBlocks);
-        cudaMemcpy(d_block_nnz, cudaHllMat->block_nnz, sizeof(int) * cudaHllMat->numBlocks, cudaMemcpyHostToDevice);
-
-        int *d_block_rows;
-        cudaMalloc((void**)&d_block_rows, sizeof(int) * cudaHllMat->numBlocks);
-        cudaMemcpy(d_block_rows, cudaHllMat->block_rows, sizeof(int) * cudaHllMat->numBlocks, cudaMemcpyHostToDevice);
-        struct FlatELLMatrix cudaHllMatG;
-        cudaHllMatG.values_flat    = d_values_flat;
-        cudaHllMatG.col_indices_flat = d_col_indices_flat;
-        cudaHllMatG.block_offsets  = d_block_offsets;
-        cudaHllMatG.block_nnz      = d_block_nnz;
-        cudaHllMatG.block_rows     = d_block_rows;
-        cudaHllMatG.total_values=cudaHllMat->total_values;      // Numero totale di elementi (lunghezza degli array flat)
-        cudaHllMatG.numBlocks=cudaHllMat->numBlocks;  
-    
-        struct FlatELLMatrix *d_mat;
-        cudaMalloc((void**)&d_mat, sizeof(struct FlatELLMatrix));
-        cudaMemcpy(d_mat, &cudaHllMatG, sizeof(struct FlatELLMatrix), cudaMemcpyHostToDevice);
-
-        
-        //double *temp=vect->vettore;
-
-        double *d_result_vettore;
-        cudaMalloc((void**)&d_result_vettore, sizeof(double) * result->righe);
-        cudaMemcpy(d_result_vettore, result->vettore, sizeof(double) * vect->righe, cudaMemcpyHostToDevice);
-
-        int *d_numBlocks;
-        cudaMalloc(&d_numBlocks, sizeof(int));
-        cudaMemcpy(d_numBlocks, &cudaHllMat->numBlocks, sizeof(int), cudaMemcpyHostToDevice);
-    
-        
-    
-
+    // alloco le strutture cuda
+        struct FlatEllAllocated d_mat=allocateFlatHll(cudaHllMat);
+        double *d_result_vettore=allocVectorGpuDouble(result);
+        double *d_vettore=allocVectorGpuDouble(vect);
+                
+    // calcolo i blocchi necessari per l'inferenza
         int block_size = blockS;
         int num_threads = matHll->numBlocks * hack;
         int grid_size = (num_threads + block_size - 1) / block_size;
     
+        // startp il timer
         cudaEventCreate(&start);
         cudaEventCreate(&stop);
         cudaEventRecord(start, 0);
 
-
-        matvec_flatell_kernel<<<grid_size, block_size>>>(d_mat,d_vettore,d_result_vettore,hack);
+        matvec_flatell_kernel<<<grid_size, block_size>>>(d_mat.gpu,d_vettore,d_result_vettore,hack);
 
         cudaError err = cudaGetLastError();
         if (err != cudaSuccess) {
             fprintf(stderr, "Errore nel lancio del kernel: %s\n", cudaGetErrorString(err));
             return -1;
         }
-
+        // calcolo il tempo del esecuznione
         cudaEventRecord(stop, 0);
-
         cudaEventSynchronize(stop);
-
         float time_ms;
         cudaEventElapsedTime(&time_ms, start, stop);
-
-        
         double time_sec = time_ms / 1000.0;
-
+        *time=time_sec;
 
 
         cudaError memcopy;
@@ -400,24 +416,17 @@ int invokeKernel1(struct Vector *vect,
             printf("errore");
         }   
 
-
         cudaEventDestroy(start);
         cudaEventDestroy(stop);
-        cudaFree(d_values_flat);
-        cudaFree(d_col_indices_flat);
+        cudaFree(d_mat.pointersToGpu->values_flat);
+        cudaFree(d_mat.pointersToGpu->col_indices_flat );
         cudaFree(d_result_vettore);
-        //cudaFree(d_vect);
-        //cudaFree(d_result);
-        cudaFree(d_block_offsets);
-        cudaFree(d_block_nnz);
-        cudaFree(d_block_rows);
-
+        cudaFree(d_mat.pointersToGpu->block_offsets);
+        cudaFree(d_mat.pointersToGpu->block_nnz);
+        cudaFree(d_mat.pointersToGpu->block_rows);
+        free(d_mat.pointersToGpu);
 
         *time=time_sec;
-    
-    
-        //vect->vettore=temp;
-
 
 
         
@@ -429,77 +438,14 @@ int invokeKernel2(struct Vector *vect,
     struct Vector *result,
     struct FlatELLMatrix *cudaHllMat, struct MatriceHLL *matHll,int hack,double* time,int blockS){
 
-    for(int i=0;i<result->righe;i++){
-        if(result->vettore[i]!=0){
-            result->vettore[i]=0;
-        }
-    }
-
-    cudaEvent_t start,stop;
-
-    double *d_values_flat;
-    cudaMalloc((void**)&d_values_flat, sizeof(double) * cudaHllMat->total_values);
-    cudaMemcpy(d_values_flat, cudaHllMat->values_flat, sizeof(double) * cudaHllMat->total_values, cudaMemcpyHostToDevice);
-
-    int *d_col_indices_flat;
-    cudaMalloc((void**)&d_col_indices_flat, sizeof(int) * cudaHllMat->total_values);
-    cudaMemcpy(d_col_indices_flat, cudaHllMat->col_indices_flat, sizeof(int) * cudaHllMat->total_values, cudaMemcpyHostToDevice);
-
-    int *d_block_offsets;
-    cudaMalloc((void**)&d_block_offsets, sizeof(int) * cudaHllMat->numBlocks);
-    cudaMemcpy(d_block_offsets, cudaHllMat->block_offsets, sizeof(int) * cudaHllMat->numBlocks, cudaMemcpyHostToDevice);
-  
-    int *d_block_nnz;
-    cudaMalloc((void**)&d_block_nnz, sizeof(int) * cudaHllMat->numBlocks);
-    cudaMemcpy(d_block_nnz, cudaHllMat->block_nnz, sizeof(int) * cudaHllMat->numBlocks, cudaMemcpyHostToDevice);
-
-    int *d_block_rows;
-    cudaMalloc((void**)&d_block_rows, sizeof(int) * cudaHllMat->numBlocks);
-    cudaMemcpy(d_block_rows, cudaHllMat->block_rows, sizeof(int) * cudaHllMat->numBlocks, cudaMemcpyHostToDevice);
-    struct FlatELLMatrix cudaHllMatG;
-    cudaHllMatG.values_flat    = d_values_flat;
-    cudaHllMatG.col_indices_flat = d_col_indices_flat;
-    cudaHllMatG.block_offsets  = d_block_offsets;
-    cudaHllMatG.block_nnz      = d_block_nnz;
-    cudaHllMatG.block_rows     = d_block_rows;
-    cudaHllMatG.total_values=cudaHllMat->total_values;      // Numero totale di elementi (lunghezza degli array flat)
-    cudaHllMatG.numBlocks=cudaHllMat->numBlocks;  
-    struct FlatELLMatrix *d_mat;
-    cudaMalloc((void**)&d_mat, sizeof(struct FlatELLMatrix));
-    cudaMemcpy(d_mat, &cudaHllMatG, sizeof(struct FlatELLMatrix), cudaMemcpyHostToDevice);
-
-    
-    double *d_vettore;
-    int righex=vect->righe;
-    cudaMalloc((void**)&d_vettore, sizeof(double) * vect->righe);
-    cudaMemcpy(d_vettore, vect->vettore, sizeof(double) * vect->righe, cudaMemcpyHostToDevice);
-    double *resultOldV=result->vettore;
-
-    //double *temp=vect->vettore;
-    //vect->vettore = d_vettore;
-
-   //struct Vector *d_vect;
-    //cudaMalloc((void**)&d_vect, sizeof(struct Vector));
-    //cudaMemcpy(d_vect, vect, sizeof(struct Vector), cudaMemcpyHostToDevice);
-
-
-    double *d_result_vettore;
-    cudaMalloc((void**)&d_result_vettore, sizeof(double) * result->righe);
- 
-
-    //result->vettore = d_result_vettore;
-
-    
-    //struct Vector *d_result;
-    //cudaMalloc((void**)&d_result, sizeof(struct Vector));
-    //cudaMemcpy(d_result, result, sizeof(struct Vector), cudaMemcpyHostToDevice);
-    //result->vettore=temp;
+        cudaEvent_t start,stop;
+        
+    // alloco le strutture cuda
+        struct FlatEllAllocated d_mat=allocateFlatHll(cudaHllMat);
+        double *d_result_vettore=allocVectorGpuDouble(result);
+        double *d_vettore=allocVectorGpuDouble(vect);
+                
    
-    int *d_numBlocks;
-    cudaMalloc(&d_numBlocks, sizeof(int));
-    cudaMemcpy(d_numBlocks, &cudaHllMat->numBlocks, sizeof(int), cudaMemcpyHostToDevice);
-   
-
     int block_size = blockS;
     int num_threads = matHll->numBlocks * hack;
     int grid_size = (num_threads + block_size - 1) / block_size;
@@ -512,48 +458,39 @@ int invokeKernel2(struct Vector *vect,
     cudaEventRecord(start, 0);
 
 
-    matvec_flatell_kernel_2<<<grid_size, block_size,1024>>>(d_mat,d_vettore,d_result_vettore,hack,vect->righe);
+    matvec_flatell_kernel_2<<<grid_size, block_size,1024>>>(d_mat.gpu,d_vettore,d_result_vettore,hack,vect->righe);
 
 
-    cudaEventRecord(stop, 0);
+   cudaError err = cudaGetLastError();
+        HANDLE_CUDA_ERROR(err);
+        // calcolo il tempo del esecuznione
+        cudaEventRecord(stop, 0);
+        cudaEventSynchronize(stop);
+        float time_ms;
+        cudaEventElapsedTime(&time_ms, start, stop);
+        double time_sec = time_ms / 1000.0;
+        *time=time_sec;
 
-    cudaEventSynchronize(stop);
 
-    float time_ms;
-    cudaEventElapsedTime(&time_ms, start, stop);
+        cudaError memcopy;
+        memcopy=cudaMemcpy(result->vettore, d_result_vettore, result->righe * sizeof(double), cudaMemcpyDeviceToHost);
+        HANDLE_CUDA_ERROR(memcopy);
 
-    
-    double time_sec = time_ms / 1000.0;
+        cudaEventDestroy(start);
+        cudaEventDestroy(stop);
+        cudaFree(d_mat.pointersToGpu->values_flat);
+        cudaFree(d_mat.pointersToGpu->col_indices_flat );
+        cudaFree(d_result_vettore);
+        cudaFree(d_mat.pointersToGpu->block_offsets);
+        cudaFree(d_mat.pointersToGpu->block_nnz);
+        cudaFree(d_mat.pointersToGpu->block_rows);
+        free(d_mat.pointersToGpu);
+
+        *time=time_sec;
 
 
-    cudaError memcopy;
-    memcopy=cudaMemcpy(result->vettore, d_result_vettore, result->righe * sizeof(double), cudaMemcpyDeviceToHost);
-    if (memcopy!=cudaSuccess) {
-        printf("errore");
-    }   
-
-    cudaFree(d_result_vettore);
-
-    cudaEventDestroy(start);
-    cudaEventDestroy(stop);
-    cudaFree(d_values_flat);
-    cudaFree(d_col_indices_flat);
-    //cudaFree(d_vect);
-    //cudaFree(d_result);
-    cudaFree(d_block_offsets);
-    cudaFree(d_block_nnz);
-    cudaFree(d_block_rows);
-
-    *time=time_sec;
-
-    cudaError err = cudaGetLastError();
-    if (err != cudaSuccess) {
-        fprintf(stderr, "Errore nel lancio del kernel: %s\n", cudaGetErrorString(err));
-        return -1;
-    }
-  
-
-  
+        
+        return 0;
   
 }
 
@@ -562,121 +499,126 @@ int invokeKernel3(struct Vector *vect,
     struct Vector *result,
     struct FlatELLMatrix *cudaHllMat, struct MatriceHLL *matHll,int hack,double* time,int blockS ){
 
-    cudaEvent_t start,stop;
-
-    double *d_values_flat;
-    cudaMalloc((void**)&d_values_flat, sizeof(double) * cudaHllMat->total_values);
-    cudaMemcpy(d_values_flat, cudaHllMat->values_flat, sizeof(double) * cudaHllMat->total_values, cudaMemcpyHostToDevice);
-
-    int *d_col_indices_flat;
-    cudaMalloc((void**)&d_col_indices_flat, sizeof(int) * cudaHllMat->total_values);
-    cudaMemcpy(d_col_indices_flat, cudaHllMat->col_indices_flat, sizeof(int) * cudaHllMat->total_values, cudaMemcpyHostToDevice);
-
-    int *d_block_offsets;
-    cudaMalloc((void**)&d_block_offsets, sizeof(int) * cudaHllMat->numBlocks);
-    cudaMemcpy(d_block_offsets, cudaHllMat->block_offsets, sizeof(int) * cudaHllMat->numBlocks, cudaMemcpyHostToDevice);
-  
-    int *d_block_nnz;
-    cudaMalloc((void**)&d_block_nnz, sizeof(int) * cudaHllMat->numBlocks);
-    cudaMemcpy(d_block_nnz, cudaHllMat->block_nnz, sizeof(int) * cudaHllMat->numBlocks, cudaMemcpyHostToDevice);
-
-    int *d_block_rows;
-    cudaMalloc((void**)&d_block_rows, sizeof(int) * cudaHllMat->numBlocks);
-    cudaMemcpy(d_block_rows, cudaHllMat->block_rows, sizeof(int) * cudaHllMat->numBlocks, cudaMemcpyHostToDevice);
-    struct FlatELLMatrix cudaHllMatG;
-    cudaHllMatG.values_flat    = d_values_flat;
-    cudaHllMatG.col_indices_flat = d_col_indices_flat;
-    cudaHllMatG.block_offsets  = d_block_offsets;
-    cudaHllMatG.block_nnz      = d_block_nnz;
-    cudaHllMatG.block_rows     = d_block_rows;
-    cudaHllMatG.total_values=cudaHllMat->total_values;      // Numero totale di elementi (lunghezza degli array flat)
-    cudaHllMatG.numBlocks=cudaHllMat->numBlocks;  
-   
-    struct FlatELLMatrix *d_mat;
-    cudaMalloc((void**)&d_mat, sizeof(struct FlatELLMatrix));
-    cudaMemcpy(d_mat, &cudaHllMatG, sizeof(struct FlatELLMatrix), cudaMemcpyHostToDevice);
-
-    
-    double *d_vettore;
-    int righex=vect->righe;
-    cudaMalloc((void**)&d_vettore, sizeof(double) * vect->righe);
-    cudaMemcpy(d_vettore, vect->vettore, sizeof(double) * vect->righe, cudaMemcpyHostToDevice);
-
-    //double *temp=vect->vettore;
-    //vect->vettore = d_vettore;
-
-    //struct Vector *d_vect;
-    //cudaMalloc((void**)&d_vect, sizeof(struct Vector));
-    //cudaMemcpy(d_vect, vect, sizeof(struct Vector), cudaMemcpyHostToDevice);
-
-
-    double *d_result_vettore;
-    cudaMalloc((void**)&d_result_vettore, sizeof(double) * result->righe);
- 
-    double *resultOldV=result->vettore;
-    //result->vettore = d_result_vettore;
+        cudaEvent_t start,stop;
         
-    
-    //struct Vector *d_result;
-    //cudaMalloc((void**)&d_result, sizeof(struct Vector));
-    //cudaMemcpy(d_result, result, sizeof(struct Vector), cudaMemcpyHostToDevice);
-    //result->vettore=resultOldV;
+    // alloco le strutture cuda
+        struct FlatEllAllocated d_mat=allocateFlatHll(cudaHllMat);
+        double *d_result_vettore=allocVectorGpuDouble(result);
+        double *d_vettore=allocVectorGpuDouble(vect);
+                
    
-    int *d_numBlocks;
-    cudaMalloc(&d_numBlocks, sizeof(int));
-    cudaMemcpy(d_numBlocks, &cudaHllMat->numBlocks, sizeof(int), cudaMemcpyHostToDevice);
+    int block_size = blockS;
+    int num_threads = matHll->numBlocks * hack;
+    int grid_size = (num_threads + block_size - 1) / block_size;
+    size_t shared_mem_size = num_threads * sizeof(double);
+
    
-    
-   
-    int threadsPerBlock = blockS;
-    int numBlocks = matHll->totalRows;
    
     cudaEventCreate(&start);
     cudaEventCreate(&stop);
     cudaEventRecord(start, 0);
 
-
-    matvec_flatell_kernel_v3<<<numBlocks, threadsPerBlock>>>(d_mat,d_vettore,d_result_vettore,hack,matHll->totalRows);
-
-
-    cudaEventRecord(stop, 0);
-
-    cudaEventSynchronize(stop);
-
-    float time_ms;
-    cudaEventElapsedTime(&time_ms, start, stop);
-
-    
-    double time_sec = time_ms / 1000.0;
-
-    
-    cudaError memcopy;
-    memcopy=cudaMemcpy(result->vettore, d_result_vettore, result->righe * sizeof(double), cudaMemcpyDeviceToHost);
-    if (memcopy!=cudaSuccess) {
-        printf("errore");
-    }   
-
-    cudaFree(d_result_vettore);
-
-    cudaEventDestroy(start);
-    cudaEventDestroy(stop);
-    cudaFree(d_values_flat);
-    cudaFree(d_col_indices_flat);
-    //cudaFree(d_vect);
-    //cudaFree(d_result);
-    cudaFree(d_block_offsets);
-    cudaFree(d_block_nnz);
-    cudaFree(d_block_rows);
-
-    *time=time_sec;
-
+    int threadsPerBlock = blockS;
+    int numBlocks = matHll->totalRows;
    
 
-    cudaError err = cudaGetLastError();
-    if (err != cudaSuccess) {
-        fprintf(stderr, "Errore nel lancio del kernel: %s\n", cudaGetErrorString(err));
-        return -1;
-    }
+    matvec_flatell_kernel_v3<<<numBlocks, threadsPerBlock>>>(d_mat.gpu,d_vettore,d_result_vettore,hack,matHll->totalRows);
+
+
+     cudaError err = cudaGetLastError();
+        if (err != cudaSuccess) {
+            fprintf(stderr, "Errore nel lancio del kernel: %s\n", cudaGetErrorString(err));
+            return -1;
+        }
+        // calcolo il tempo del esecuznione
+        cudaEventRecord(stop, 0);
+        cudaEventSynchronize(stop);
+        float time_ms;
+        cudaEventElapsedTime(&time_ms, start, stop);
+        double time_sec = time_ms / 1000.0;
+        *time=time_sec;
+
+
+        cudaError memcopy;
+        memcopy=cudaMemcpy(result->vettore, d_result_vettore, result->righe * sizeof(double), cudaMemcpyDeviceToHost);
+        if (memcopy!=cudaSuccess) {
+            printf("errore");
+        }   
+
+        cudaEventDestroy(start);
+        cudaEventDestroy(stop);
+        cudaFree(d_mat.pointersToGpu->values_flat);
+        cudaFree(d_mat.pointersToGpu->col_indices_flat );
+        cudaFree(d_result_vettore);
+        cudaFree(d_mat.pointersToGpu->block_offsets);
+        cudaFree(d_mat.pointersToGpu->block_nnz);
+        cudaFree(d_mat.pointersToGpu->block_rows);
+        free(d_mat.pointersToGpu);
+
+        *time=time_sec;
+
+
+        
+        return 0;
+
+  
+}
+
+int invokeKernelWarpColonne(struct Vector *vect,
+    struct Vector *result,
+    struct FlatELLMatrix *cudaHllMat, struct MatriceHLL *matHll,int hack,double* time,int blockS ){
+        cudaEvent_t start,stop;
+        
+        struct FlatEllAllocated d_mat=allocateFlatHll(cudaHllMat);
+        double *d_result_vettore=allocVectorGpuDouble(result);
+        double *d_vettore=allocVectorGpuDouble(vect);
+                
+   
+    int block_size = blockS;
+    int num_threads = matHll->numBlocks*32;
+    int grid_size = (num_threads + block_size - 1) / block_size;
+
+   
+   
+    cudaEventCreate(&start);
+    cudaEventCreate(&stop);
+    cudaEventRecord(start, 0);
+
+    int threadsPerBlock = blockS;
+    //int numBlocks = matHll->totalRows;
+    matvec_flatell_kernel_warpCOlonne<<<grid_size, threadsPerBlock>>>(d_mat.gpu,d_vettore,d_result_vettore,hack,matHll->numBlocks);
+
+
+     cudaError err = cudaGetLastError();
+        HANDLE_CUDA_ERROR(err);
+        // calcolo il tempo del esecuznione
+        cudaEventRecord(stop, 0);
+        cudaEventSynchronize(stop);
+        float time_ms;
+        cudaEventElapsedTime(&time_ms, start, stop);
+        double time_sec = time_ms / 1000.0;
+        *time=time_sec;
+
+
+        cudaError memcopy;
+        memcopy=cudaMemcpy(result->vettore, d_result_vettore, result->righe * sizeof(double), cudaMemcpyDeviceToHost);
+        HANDLE_CUDA_ERROR(memcopy);
+
+        cudaEventDestroy(start);
+        cudaEventDestroy(stop);
+        cudaFree(d_mat.pointersToGpu->values_flat);
+        cudaFree(d_mat.pointersToGpu->col_indices_flat );
+        cudaFree(d_result_vettore);
+        cudaFree(d_mat.pointersToGpu->block_offsets);
+        cudaFree(d_mat.pointersToGpu->block_nnz);
+        cudaFree(d_mat.pointersToGpu->block_rows);
+        free(d_mat.pointersToGpu);
+
+        *time=time_sec;
+
+
+        
+        return 0;
 
   
 }
