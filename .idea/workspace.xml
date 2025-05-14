@@ -1,0 +1,123 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="AutoImportSettings">
+    <option name="autoReloadType" value="SELECTIVE" />
+  </component>
+  <component name="ChangeListManager">
+    <list default="true" id="09ce445d-0b75-45e1-9dd5-2ead4fb145bc" name="Changes" comment="">
+      <change beforePath="$PROJECT_DIR$/.idea/misc.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/misc.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/.idea/scpa_Ax.iml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/scpa_Ax.iml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/lib/mat/cuda_luca.cu" beforeDir="false" afterPath="$PROJECT_DIR$/lib/mat/cuda_luca.cu" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/result/cudaPerf.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/result/graph1.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/result/plot.ipynb" beforeDir="false" afterPath="$PROJECT_DIR$/result/plot.ipynb" afterDir="false" />
+    </list>
+    <option name="SHOW_DIALOG" value="false" />
+    <option name="HIGHLIGHT_CONFLICTS" value="true" />
+    <option name="HIGHLIGHT_NON_ACTIVE_CHANGELIST" value="false" />
+    <option name="LAST_RESOLUTION" value="IGNORE" />
+  </component>
+  <component name="Git.Settings">
+    <option name="RECENT_GIT_ROOT_PATH" value="$PROJECT_DIR$" />
+  </component>
+  <component name="GitHubPullRequestSearchHistory">{
+  &quot;lastFilter&quot;: {
+    &quot;state&quot;: &quot;OPEN&quot;,
+    &quot;assignee&quot;: &quot;lucacupellaro&quot;
+  }
+}</component>
+  <component name="GithubPullRequestsUISettings">{
+  &quot;selectedUrlAndAccountId&quot;: {
+    &quot;url&quot;: &quot;https://github.com/NomeMio/scpa_Ax.git&quot;,
+    &quot;accountId&quot;: &quot;7a9620d8-d93c-411c-aeab-feddb77e0000&quot;
+  }
+}</component>
+  <component name="ProjectColorInfo">{
+  &quot;customColor&quot;: &quot;&quot;,
+  &quot;associatedIndex&quot;: 3
+}</component>
+  <component name="ProjectId" id="2vtUnNgmuFXhuxxG1UaHKvFEedO" />
+  <component name="ProjectViewState">
+    <option name="hideEmptyMiddlePackages" value="true" />
+    <option name="showLibraryContents" value="true" />
+  </component>
+  <component name="PropertiesComponent"><![CDATA[{
+  "keyToString": {
+    "ModuleVcsDetector.initialDetectionPerformed": "true",
+    "RunOnceActivity.ShowReadmeOnStart": "true",
+    "RunOnceActivity.git.unshallow": "true",
+    "SHELLCHECK.PATH": "/home/luca/.local/share/JetBrains/IntelliJIdea2025.1/Shell Script/shellcheck",
+    "git-widget-placeholder": "main",
+    "last_opened_file_path": "/home/luca/ISW2",
+    "node.js.detected.package.eslint": "true",
+    "node.js.detected.package.tslint": "true",
+    "node.js.selected.package.eslint": "(autodetect)",
+    "node.js.selected.package.tslint": "(autodetect)",
+    "nodejs_package_manager_path": "npm",
+    "settings.editor.selected.configurable": "com.intellij.jupyter.py.connections.configurable.JupyterServersConfigurable",
+    "vue.rearranger.settings.migration": "true"
+  }
+}]]></component>
+  <component name="RecentsManager">
+    <key name="CopyFile.RECENT_KEYS">
+      <recent name="$PROJECT_DIR$/result" />
+      <recent name="$PROJECT_DIR$/mat" />
+    </key>
+  </component>
+  <component name="SharedIndexes">
+    <attachedChunks>
+      <set>
+        <option value="bundled-js-predefined-d6986cc7102b-f27c65a3e318-JavaScript-PY-251.23774.444" />
+        <option value="bundled-python-sdk-890ed5b35930-d9c5bdb153f4-com.jetbrains.pycharm.pro.sharedIndexes.bundled-PY-251.23774.444" />
+      </set>
+    </attachedChunks>
+  </component>
+  <component name="TaskManager">
+    <task active="true" id="Default" summary="Default task">
+      <changelist id="09ce445d-0b75-45e1-9dd5-2ead4fb145bc" name="Changes" comment="" />
+      <created>1744964030209</created>
+      <option name="number" value="Default" />
+      <option name="presentableId" value="Default" />
+      <updated>1744964030209</updated>
+      <workItem from="1744964031686" duration="4750000" />
+      <workItem from="1744968974101" duration="5183000" />
+      <workItem from="1744987853841" duration="4407000" />
+      <workItem from="1744995938342" duration="1026000" />
+      <workItem from="1745051032007" duration="5799000" />
+      <workItem from="1745174503718" duration="1584000" />
+      <workItem from="1745350691228" duration="4980000" />
+      <workItem from="1745402413507" duration="671000" />
+      <workItem from="1745403085509" duration="7282000" />
+      <workItem from="1745419037861" duration="1160000" />
+      <workItem from="1745436991210" duration="1624000" />
+      <workItem from="1745439081654" duration="1001000" />
+      <workItem from="1745483293829" duration="538000" />
+      <workItem from="1745483832875" duration="837000" />
+      <workItem from="1745524492719" duration="1143000" />
+      <workItem from="1745527429685" duration="370000" />
+      <workItem from="1745571268329" duration="2957000" />
+      <workItem from="1745608461197" duration="1216000" />
+      <workItem from="1745657720165" duration="15037000" />
+      <workItem from="1745684168370" duration="1572000" />
+      <workItem from="1745845307304" duration="1779000" />
+      <workItem from="1745857529666" duration="2310000" />
+      <workItem from="1745910628508" duration="2822000" />
+      <workItem from="1746095964090" duration="85000" />
+    </task>
+    <servers />
+  </component>
+  <component name="TypeScriptGeneratedFilesManager">
+    <option name="version" value="3" />
+  </component>
+  <component name="Vcs.Log.Tabs.Properties">
+    <option name="TAB_STATES">
+      <map>
+        <entry key="MAIN">
+          <value>
+            <State />
+          </value>
+        </entry>
+      </map>
+    </option>
+  </component>
+</project>

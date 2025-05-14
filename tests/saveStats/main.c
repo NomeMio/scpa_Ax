@@ -87,6 +87,7 @@ int main(int argc, char *argv[]) {
 int calculateHackSize2(MatriceRaw *rawMat) {
     int R = rawMat->width;
     int nz = rawMat->nz;
+    int vectorRegister=64; //avx512 è grande 64 bits e ha 32 registri 
     if (nz == 0) return 1;
 
     // Conta non-zero per riga
@@ -99,64 +100,24 @@ int calculateHackSize2(MatriceRaw *rawMat) {
         row_nz[ rawMat->iVettore[k] ]++;
     }
 
-    // Calcola media nz per riga
+
     double avg = (double)nz / R;
     free(row_nz);
 
-    // Stima footprint per riga (dato + indice)
+   
     double footprint_per_row = avg * (sizeof(double) + sizeof(int));
 
-    // Legge dimensione cache L1
-    long cache_L1 = sysconf(_SC_LEVEL1_DCACHE_SIZE);
-    printf("cache L1 size: %ld\n", cache_L1);
-    //if (cache_L1 < 0) cache_L1 = 32768;  // fallback a 32KB se sconosciuta
 
-    // Calcola righe che stanno nella cache
-    int rows_in_cache = (int)(cache_L1 / footprint_per_row);
+ 
+    int rows_in_cache = (int)(vectorRegister / footprint_per_row);
 
-    // Clamp hack tra 1 e R
+    
     int hack = rows_in_cache < 1 ? 1 : (rows_in_cache > R ? R : rows_in_cache);
 
     return hack;
 }
 
 
-int calculateHackSize(MatriceRaw *rawMat) {
-    int totalRows = rawMat->width;
-    int nz = rawMat->nz;
-    if (nz == 0) return 1;
-
-    int *row_nz_counts = calloc(totalRows, sizeof(int));
-    if (!row_nz_counts) {
-        perror("Errore allocazione row_nz_counts");
-        return totalRows;
-    }
-
-    for (int i = 0; i < nz; i++) {
-        row_nz_counts[rawMat->iVettore[i]]++;
-    }
-
-    double avg_nz_per_row = (double)nz / totalRows;
-    double var_nz_per_row = 0.0;
-    for (int i = 0; i < totalRows; i++) {
-        var_nz_per_row += pow(row_nz_counts[i] - avg_nz_per_row, 2);
-    }
-    var_nz_per_row /= totalRows;
-
-    free(row_nz_counts);
-    printf(" varianza: %lf\n",var_nz_per_row);
-
-    // Logica per determinare hack_size in base a avg e var
-    int hack_size;
-    if (var_nz_per_row < 10) { // Bassa varianza: righe simili
-        hack_size = totalRows; // Un unico blocco
-    } else if (var_nz_per_row < 100) {
-        hack_size = nz / 50; // Valore intermedio
-    } else {
-        hack_size = nz / 2000; // Alta varianza: blocchi piccoli
-    }
-    return fmax(1, fmin(hack_size, totalRows)); // Assicurati che sia valido
-}
 
 int process_matrix(const char *matrix_name, const AppConfig *config,FILE * csv){
     char full_matrix_path[512]; // Increased buffer size
