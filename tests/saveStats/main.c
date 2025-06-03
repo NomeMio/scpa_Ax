@@ -298,8 +298,8 @@ for(unsigned int  j=32;j<CUDA_THREADS;j=j*2){
     freeRandom(&resultV); 
 }
 
-for(int righePerBlocco=16;righePerBlocco<256;righePerBlocco*=2){
-for(int miniWarpSize=4;miniWarpSize<=16;miniWarpSize*=2){
+for(int righePerBlocco=16;righePerBlocco<128;righePerBlocco*=2){
+for(int miniWarpSize=4;miniWarpSize<32;miniWarpSize*=2){
     if(righePerBlocco*miniWarpSize %32!=0){continue;}
     struct CsvEntry result;
     struct Vector *resultV;
