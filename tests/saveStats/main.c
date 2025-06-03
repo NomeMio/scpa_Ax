@@ -147,7 +147,7 @@ int process_matrix(const char *matrix_name, const AppConfig *config,FILE * csv){
          fprintf(stderr, "Error converting %s to CSR\n", matrix_name);
          goto cleanup;
     }
-    int hack=64//calculateHackSize2(mat);
+    int hack=64;//calculateHackSize2(mat);
     //int hack=mat->nz/200;
     convertRawToHll2(mat, hack, &matHll);
      if (!matHll) {
