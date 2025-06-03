@@ -228,6 +228,55 @@ __global__ void crs_mat_32_way(MatriceCsr *d_mat, Vector *d_vec, Vector *d_resul
     }
 }
 
+
+
+// csr_mat mult with 8 threads per row
+__global__ void crs_mat_miniWarp(MatriceCsr *d_mat, Vector *d_vec, Vector *d_result,int  miniWarpSize) {
+    extern  __shared__ double reduceVals[]; 
+    int id = blockIdx.x * blockDim.x + threadIdx.x; // id
+    int realRow = id /miniWarpSize; // Check row number dividing id % number of thread per warp 2^3
+
+    int position = id % miniWarpSize ;
+    //int position = id & 7; // get position inside 8 threads block
+  
+    if (realRow >= d_mat->height) return; //exit if id is outisde of lines range
+    int base = d_mat->iRP[realRow]; //start of array
+    int rowDim = d_mat->iRP[realRow + 1] - base;
+    double sum = 0.0;
+    //#pragma unroll
+    for (int i = 0; (i + 1) * miniWarpSize <= rowDim; ++i) {
+        int col_index = d_mat->jValori[base + i * miniWarpSize + position];
+        double  matVal= d_mat->valori[base + i * miniWarpSize + position];
+        double vectVal= d_vec->vettore[col_index];
+        sum += matVal*vectVal;
+    }
+    __syncthreads();
+    int remaining = rowDim % miniWarpSize;
+    if (remaining > 0) {
+        int start_of_remaining = base + rowDim - remaining;
+        if (position < remaining) {
+            int col_index = d_mat->jValori[start_of_remaining + position];
+            double  matVal= d_mat->valori[start_of_remaining + position];
+            double vectVal= d_vec->vettore[col_index];
+            sum += matVal*vectVal;
+        }
+    }
+    reduceVals[threadIdx.x]=sum;
+    __syncthreads();
+    for(unsigned int s=miniWarpSize>>1; s>0; s >>=1) {
+        if(position<s) {
+            reduceVals[threadIdx.x]+=reduceVals[threadIdx.x+s];
+        }
+        __syncthreads();
+    }
+    
+    if (position == 0) {
+        d_result->vettore[realRow] = reduceVals[threadIdx.x]; // Explicit cast if d_result is float
+    }
+}
+
+
+
 __global__ void crs_mat_32_way_coal(MatriceCsr * __restrict__ d_mat, Vector * __restrict__ d_vec, Vector *d_result) {
     int id = blockIdx.x * blockDim.x + threadIdx.x; 
     int realRow = id >> 5; 
@@ -294,6 +343,32 @@ int multCudaCSRKernelWarp(MatriceCsr *mat,Vector *vector,Vector *result,double *
     freeVectorGpu(&resultG);
     freeMatriceCsrGpu(&matG);
 }
+
+int multCudaCSRKernelMiniWarp(MatriceCsr *mat,Vector *vector,Vector *result,double *time,int  miniWarpSize,int righePerBlocco){
+    
+    MatriceCsr *matG;
+    allocateAndCopyMatriceCsrGpu(mat,&matG,0);
+    Vector *vectorG;
+    Vector *resultG;
+    allocateAndCopyVector(vector,&vectorG);
+    allocateAndCopyVector(result,&resultG);
+    unsigned int threadsPerBlock = miniWarpSize*righePerBlocco; // 32 warps of 8 threads each
+    unsigned int rows=mat->height;
+    int N = vector->righe*miniWarpSize;
+    unsigned int shardeMem=sizeof(double)*threadsPerBlock;
+    N=N+(threadsPerBlock-N%threadsPerBlock);
+    int blocksPerGrid = (N + threadsPerBlock - 1) / threadsPerBlock;
+   
+    CUDA_TIME((crs_mat_miniWarp<<<blocksPerGrid,threadsPerBlock,shardeMem>>>(matG, vectorG, resultG,miniWarpSize)),time);
+    //CUDA_CHECK(cudaDeviceSynchronize());
+    
+    copyVectorBackToHost(result,resultG);
+    freeVectorGpu(&vectorG);
+    freeVectorGpu(&resultG);
+    freeMatriceCsrGpu(&matG);
+}
+
+
 
 int multCudaCSRKernelWarpCoal(MatriceCsr *mat,Vector *vector,Vector *result,double *time,unsigned int threadsPerBlock){
     

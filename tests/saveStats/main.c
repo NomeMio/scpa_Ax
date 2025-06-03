@@ -16,7 +16,7 @@
 #define DEFAULT_SEED 42
 #define SCRIPT_COMMAND "../../../addMatrices.sh" 
 #define CSV_OUTPUT_FILE "../../../result/test.csv" 
-
+#define CUDA_THREADS 256
 
 typedef struct {
     int *thread_counts;
@@ -250,7 +250,7 @@ int process_matrix(const char *matrix_name, const AppConfig *config,FILE * csv){
     }
 
 //------------------------------CUDA CSR  SERIAL KERNEL-----------------------------//
-for(unsigned int  j=32;j<257;j=j*2){
+for(unsigned int  j=32;j<CUDA_THREADS;j=j*2){
     struct CsvEntry result;
     struct Vector *resultV;
     generateEmpty(rows, &resultV);
@@ -274,7 +274,7 @@ for(unsigned int  j=32;j<257;j=j*2){
     freeRandom(&resultV); 
 }
 //------------------------------CUDA CSR  WARP KERNEL-----------------------------//
-for(unsigned int  j=32;j<257;j=j*2){
+for(unsigned int  j=32;j<CUDA_THREADS;j=j*2){
     struct CsvEntry result;
     struct Vector *resultV;
     generateEmpty(rows, &resultV);
@@ -298,14 +298,39 @@ for(unsigned int  j=32;j<257;j=j*2){
     freeRandom(&resultV); 
 }
 
+for(int righePerBlocco=16;righePerBlocco<256;righePerBlocco*=2){
+for(int miniWarpSize=4;miniWarpSize<16;miniWarpSize*=2){
+    if(righePerBlocco*miniWarpSize %32!=0){continue;}
+    struct CsvEntry result;
+    struct Vector *resultV;
+    generateEmpty(rows, &resultV);
+    initializeCsvEntry(&result, matrix_name, "csr", "cuda","warpCostum",mat->nz, miniWarpSize, mat->height*miniWarpSize, righePerBlocco,iterations,0.0,0.0);
 
+    double time = 0;
+    for (int i = 0; i < iterations; i++) {
+        multCudaCSRKernelMiniWarp( csrMatrice, vectorR, resultV, &time,miniWarpSize,righePerBlocco);
+        result.measure[i] = 2.0 * mat->nz / (time * 1000000000);
+    }
+    if(areVectorsEqual(resultV,resultSerial)!=0){
+        printf("result cuda warp is borken");
+    }else{
+        double diff;
+        double percentage;
+        calculate_vector_differences(resultV,resultSerial,&diff,&percentage);
+        result.errorPercentage=percentage;
+        result.errorValue=diff;
+        append_csv_entry(csv,&result);
+    }
+    freeRandom(&resultV); 
+}
+}
 MatriceCsr *coal;
 if( coaliscanceMatCsr(csrMatrice,&coal)==-1){
         printf("error creating coalescent csr \n");
         exit(-1);
 };
 
-for(unsigned int  j=32;j<257;j=j*2){
+for(unsigned int  j=32;j<CUDA_THREADS;j=j*2){
 
 
     struct CsvEntry result;
@@ -345,7 +370,7 @@ if (flatHll != 0){
 }
 
 //------------------------------CUDA HLL  1-----------------------------//
-for(unsigned int  j=32;j<257;j=j*2){
+for(unsigned int  j=32;j<CUDA_THREADS;j=j*2){
     struct CsvEntry result;
     struct Vector *resultV;
     generateEmpty(rows, &resultV);
@@ -375,6 +400,7 @@ for(unsigned int  j=32;j<257;j=j*2){
             printf("executed kernel1 hll\n");
 
 //------------------------------CUDA HLL  2-----------------------------//
+//129
 for(unsigned int  j=32;j<129;j=j*2){
     struct CsvEntry result;
     struct Vector *resultV;
@@ -405,7 +431,7 @@ for(unsigned int  j=32;j<129;j=j*2){
             printf("executed kernel2 hll\n");
 
 //------------------------------CUDA HLL  3-----------------------------//
-for(unsigned int  j=32;j<257;j=j*2){
+for(unsigned int  j=32;j<CUDA_THREADS;j=j*2){
     struct CsvEntry result;
     struct Vector *resultV;
     generateEmpty(rows, &resultV);
