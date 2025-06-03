@@ -147,7 +147,7 @@ int process_matrix(const char *matrix_name, const AppConfig *config,FILE * csv){
          fprintf(stderr, "Error converting %s to CSR\n", matrix_name);
          goto cleanup;
     }
-    int hack=calculateHackSize2(mat);
+    int hack=64//calculateHackSize2(mat);
     //int hack=mat->nz/200;
     convertRawToHll2(mat, hack, &matHll);
      if (!matHll) {
@@ -299,7 +299,7 @@ for(unsigned int  j=32;j<CUDA_THREADS;j=j*2){
 }
 
 for(int righePerBlocco=16;righePerBlocco<256;righePerBlocco*=2){
-for(int miniWarpSize=4;miniWarpSize<16;miniWarpSize*=2){
+for(int miniWarpSize=4;miniWarpSize<=16;miniWarpSize*=2){
     if(righePerBlocco*miniWarpSize %32!=0){continue;}
     struct CsvEntry result;
     struct Vector *resultV;
