@@ -9,6 +9,7 @@ int multCudaCSRKernelWarpCoal(MatriceCsr *mat,Vector *vector,Vector *result,doub
 int multCudaCSRKernelWarp(MatriceCsr *mat,Vector *vector,Vector *result,double *time,unsigned int threadsPerBlock);
 int multCudaCSRKernelLinear(MatriceCsr *mat,Vector *vector,Vector *result,double *time,unsigned int threadsPerBlock);
 int multCudaCSRKernelMiniWarp(MatriceCsr *mat,Vector *vector,Vector *result,double *time,int miniWarpSize,int righePerBlocco);
+int multCudaCSRKernelMiniWarpShuffle(MatriceCsr *mat,Vector *vector,Vector *result,double *time,int  miniWarpSize,int righePerBlocco);
 #ifdef __cplusplus
 }
 #endif

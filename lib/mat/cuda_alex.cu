@@ -229,8 +229,46 @@ __global__ void crs_mat_32_way(MatriceCsr *d_mat, Vector *d_vec, Vector *d_resul
 }
 
 
+__global__ void crs_mat_miniWarpWithShfl(MatriceCsr *d_mat, Vector *d_vec, Vector *d_result,int  miniWarpSize) {
+    int id = blockIdx.x * blockDim.x + threadIdx.x; 
+    int realRow = id /miniWarpSize; 
+    int position = id % miniWarpSize ;
+  
+    if (realRow >= d_mat->height) return; 
+    int base = d_mat->iRP[realRow]; 
+    int rowDim = d_mat->iRP[realRow + 1] - base;
+    double sum = 0.0;
+    for (int i = 0; (i + 1) * miniWarpSize <= rowDim; ++i) {
+        int col_index = d_mat->jValori[base + i * miniWarpSize + position];
+        double  matVal= d_mat->valori[base + i * miniWarpSize + position];
+        double vectVal= d_vec->vettore[col_index];
+        sum += matVal*vectVal;
+    }
+    int remaining = rowDim % miniWarpSize;
+    if (remaining > 0) {
+        int start_of_remaining = base + rowDim - remaining;
+        if (position < remaining) {
+            int col_index = d_mat->jValori[start_of_remaining + position];
+            double  matVal= d_mat->valori[start_of_remaining + position];
+            double vectVal= d_vec->vettore[col_index];
+            sum += matVal*vectVal;
+        }
+    }
+    //__syncthreads();
+    unsigned int miniwarp_mask = ((1u << miniWarpSize) - 1); // Creates a mask of 'miniwarp_size' bits set
+    miniwarp_mask = miniwarp_mask << (((threadIdx.x%32)/miniWarpSize) * miniWarpSize); // Shift to the miniwarp's position in the warp
 
-// csr_mat mult with 8 threads per row
+    for (int offset = miniWarpSize / 2; offset > 0; offset /= 2) {
+   
+        sum += __shfl_down_sync(miniwarp_mask, sum, offset);
+    }
+    if (position==0){
+        d_result->vettore[realRow] =sum;
+    }
+  
+}
+
+
 __global__ void crs_mat_miniWarp(MatriceCsr *d_mat, Vector *d_vec, Vector *d_result,int  miniWarpSize) {
     extern  __shared__ double reduceVals[]; 
     int id = blockIdx.x * blockDim.x + threadIdx.x; // id
@@ -250,7 +288,7 @@ __global__ void crs_mat_miniWarp(MatriceCsr *d_mat, Vector *d_vec, Vector *d_res
         double vectVal= d_vec->vettore[col_index];
         sum += matVal*vectVal;
     }
-    __syncthreads();
+    //__syncthreads();
     int remaining = rowDim % miniWarpSize;
     if (remaining > 0) {
         int start_of_remaining = base + rowDim - remaining;
@@ -271,7 +309,7 @@ __global__ void crs_mat_miniWarp(MatriceCsr *d_mat, Vector *d_vec, Vector *d_res
     }
     
     if (position == 0) {
-        d_result->vettore[realRow] = reduceVals[threadIdx.x]; // Explicit cast if d_result is float
+        d_result->vettore[realRow] = reduceVals[threadIdx.x];
     }
 }
 
@@ -367,7 +405,29 @@ int multCudaCSRKernelMiniWarp(MatriceCsr *mat,Vector *vector,Vector *result,doub
     freeVectorGpu(&resultG);
     freeMatriceCsrGpu(&matG);
 }
-
+int multCudaCSRKernelMiniWarpShuffle(MatriceCsr *mat,Vector *vector,Vector *result,double *time,int  miniWarpSize,int righePerBlocco){
+    
+    MatriceCsr *matG;
+    allocateAndCopyMatriceCsrGpu(mat,&matG,0);
+    Vector *vectorG;
+    Vector *resultG;
+    allocateAndCopyVector(vector,&vectorG);
+    allocateAndCopyVector(result,&resultG);
+    unsigned int threadsPerBlock = miniWarpSize*righePerBlocco; // 32 warps of 8 threads each
+    unsigned int rows=mat->height;
+    int N = vector->righe*miniWarpSize;
+    unsigned int shardeMem=sizeof(double)*threadsPerBlock;
+    N=N+(threadsPerBlock-N%threadsPerBlock);
+    int blocksPerGrid = (N + threadsPerBlock - 1) / threadsPerBlock;
+   
+    CUDA_TIME((crs_mat_miniWarpWithShfl<<<blocksPerGrid,threadsPerBlock,shardeMem>>>(matG, vectorG, resultG,miniWarpSize)),time);
+    //CUDA_CHECK(cudaDeviceSynchronize());
+    
+    copyVectorBackToHost(result,resultG);
+    freeVectorGpu(&vectorG);
+    freeVectorGpu(&resultG);
+    freeMatriceCsrGpu(&matG);
+}
 
 
 int multCudaCSRKernelWarpCoal(MatriceCsr *mat,Vector *vector,Vector *result,double *time,unsigned int threadsPerBlock){

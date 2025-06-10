@@ -274,7 +274,7 @@ for(unsigned int  j=32;j<CUDA_THREADS;j=j*2){
     freeRandom(&resultV); 
 }
 //------------------------------CUDA CSR  WARP KERNEL-----------------------------//
-for(unsigned int  j=32;j<CUDA_THREADS;j=j*2){
+for(unsigned int  j=32;j<CUDA_THREADS;j=j+32){
     struct CsvEntry result;
     struct Vector *resultV;
     generateEmpty(rows, &resultV);
@@ -297,10 +297,9 @@ for(unsigned int  j=32;j<CUDA_THREADS;j=j*2){
     }
     freeRandom(&resultV); 
 }
-
+for(int miniWarpSize=4;miniWarpSize<=32;miniWarpSize*=2){
 for(int righePerBlocco=16;righePerBlocco<128;righePerBlocco*=2){
-for(int miniWarpSize=4;miniWarpSize<32;miniWarpSize*=2){
-    if(righePerBlocco*miniWarpSize %32!=0){continue;}
+    if(righePerBlocco*miniWarpSize %32!=0 || righePerBlocco<miniWarpSize || righePerBlocco*miniWarpSize>1024){continue;}
     struct CsvEntry result;
     struct Vector *resultV;
     generateEmpty(rows, &resultV);
@@ -309,6 +308,32 @@ for(int miniWarpSize=4;miniWarpSize<32;miniWarpSize*=2){
     double time = 0;
     for (int i = 0; i < iterations; i++) {
         multCudaCSRKernelMiniWarp( csrMatrice, vectorR, resultV, &time,miniWarpSize,righePerBlocco);
+        result.measure[i] = 2.0 * mat->nz / (time * 1000000000);
+    }
+    if(areVectorsEqual(resultV,resultSerial)!=0){
+        printf("result cuda warp is borken");
+    }else{
+        double diff;
+        double percentage;
+        calculate_vector_differences(resultV,resultSerial,&diff,&percentage);
+        result.errorPercentage=percentage;
+        result.errorValue=diff;
+        append_csv_entry(csv,&result);
+    }
+    freeRandom(&resultV); 
+}
+}
+for(int miniWarpSize=4;miniWarpSize<=32;miniWarpSize*=2){
+for(int righePerBlocco=16;righePerBlocco<128;righePerBlocco*=2){
+    if(righePerBlocco*miniWarpSize %32!=0 || righePerBlocco<miniWarpSize || righePerBlocco*miniWarpSize>1024){continue;}
+    struct CsvEntry result;
+    struct Vector *resultV;
+    generateEmpty(rows, &resultV);
+    initializeCsvEntry(&result, matrix_name, "csr", "cuda","warpCostumShuffle",mat->nz, miniWarpSize, mat->height*miniWarpSize, righePerBlocco,iterations,0.0,0.0);
+
+    double time = 0;
+    for (int i = 0; i < iterations; i++) {
+        multCudaCSRKernelMiniWarpShuffle( csrMatrice, vectorR, resultV, &time,miniWarpSize,righePerBlocco);
         result.measure[i] = 2.0 * mat->nz / (time * 1000000000);
     }
     if(areVectorsEqual(resultV,resultSerial)!=0){
