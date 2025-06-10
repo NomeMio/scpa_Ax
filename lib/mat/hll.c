@@ -427,7 +427,7 @@ int  hllMultWithTime(int (*multiplayer)(struct MatriceHLL *, struct Vector *, st
     return retunrE;
 }
 
-int __attribute__((optimize("O2"))) openMpMultiplyHLL(struct MatriceHLL *mat, struct Vector *vec, struct Vector *result)
+int __attribute__((optimize("O3"))) openMpMultiplyHLL(struct MatriceHLL *mat, struct Vector *vec, struct Vector *result)
 {
 
     if (!mat || !vec || !result)

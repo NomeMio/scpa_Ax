@@ -91,7 +91,7 @@ int __attribute__((optimize("O3"))) serialCsrMult(struct MatriceCsr *csr, struct
     }
 }
 
-int __attribute__((optimize("O1"))) parallelCsrMult(struct MatriceCsr *csr, struct Vector *vec, struct Vector *result)
+int __attribute__((optimize("O3"))) parallelCsrMult(struct MatriceCsr *csr, struct Vector *vec, struct Vector *result)
 {
     unsigned int nrows = vec->righe;
     #pragma omp parallel for schedule(static)
