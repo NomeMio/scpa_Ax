@@ -2,6 +2,7 @@
 #include <stdlib.h>
 #include "mmio.h"
 #include "matriciOpp.h"
+#include "cuda_luca.h"
 #include <time.h>
 #include <omp.h>
 #define DEBUG 0
@@ -425,6 +426,41 @@ int  hllMultWithTime(int (*multiplayer)(struct MatriceHLL *, struct Vector *, st
     t = omp_get_wtime() - t;
     (*execTime) = t; // in seconds
     return retunrE;
+}
+
+
+int openMpMultiplyHllFlat(struct FlatELLMatrix *mat,struct Vector *vec, struct Vector *result);
+int flatHllMultOpenMP(struct FlatELLMatrix *hll, struct Vector *vec, struct Vector *result, double *execTime){
+    double t;
+    t = omp_get_wtime();
+    int retunrE=openMpMultiplyHllFlat(hll, vec, result);
+    t = omp_get_wtime() - t;
+    (*execTime) = t; // in seconds
+    return retunrE;
+}
+
+int __attribute__((optimize("O3"))) openMpMultiplyHllFlat(struct FlatELLMatrix *mat, struct Vector *vec, struct Vector *result){
+    if (!mat || !vec || !result)
+        return -1;
+    int hackSize = mat->hack;
+    #pragma omp parallel for schedule(static)
+    for (int block = 0; block < mat->numBlocks; block++) {
+        int block_start = mat->block_offsets[block];
+        int max_nnz_per_row = mat->block_nnz[block];
+        int rowNumber = mat->block_rows[block];
+        for (int i = 0; i < rowNumber; i++) {
+            double sum = 0.0;
+            for (int j = 0; j < max_nnz_per_row; j++) {
+                int flat_idx = block_start + j * rowNumber + i;
+                int col = mat->col_indices_flat[flat_idx];
+                double molt = vec->vettore[col];
+                double val = mat->values_flat[flat_idx];
+                sum += val * molt;
+            }
+            result->vettore[hackSize * block + i] = sum;
+        }
+    }
+    return 0;
 }
 
 int __attribute__((optimize("O3"))) openMpMultiplyHLL(struct MatriceHLL *mat, struct Vector *vec, struct Vector *result)

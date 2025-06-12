@@ -78,6 +78,7 @@ typedef struct FlatELLMatrix {
     int     total_values;      // Numero totale di elementi (lunghezza degli array flat)
     int     numBlocks;         // Numero di blocchi
 } FlatELLMatrix;
+int flatHllMultOpenMP(struct FlatELLMatrix *hll, struct Vector *vec, struct Vector *result, double *execTime);
 int convertRawToHll2(struct MatriceRaw *matricePointer, int hackSizeP, struct MatriceHLL **hllP);
 int convertRawToEllpack(MatriceRaw *matricePointer, int hackSize, ELLPACK_Block **block);
 int convertRawToHll(MatriceRaw *matricePointer, int hackSizeP, MatriceHLL **hll);
