@@ -448,16 +448,15 @@ int __attribute__((optimize("O3"))) openMpMultiplyHllFlat(struct FlatELLMatrix *
         int block_start = mat->block_offsets[block];
         int max_nnz_per_row = mat->block_nnz[block];
         int rowNumber = mat->block_rows[block];
-        for (int i = 0; i < rowNumber; i++) {
-            double sum = 0.0;
-            for (int j = 0; j < max_nnz_per_row; j++) {
-                int flat_idx = block_start + j * rowNumber + i;
-                int col = mat->col_indices_flat[flat_idx];
-                double molt = vec->vettore[col];
-                double val = mat->values_flat[flat_idx];
-                sum += val * molt;
+       for (int j = 0; j < max_nnz_per_row; j++) {
+            int flat_idx = block_start + j * rowNumber;
+            #pragma omp simd
+            for (int i = 0; i < rowNumber; i++) {
+                  int col = mat->col_indices_flat[flat_idx+i];
+                  double molt = vec->vettore[col];
+                  double val = mat->values_flat[flat_idx+i];
+                  result->vettore[hackSize * block + i] += val * molt;
             }
-            result->vettore[hackSize * block + i] = sum;
         }
     }
     return 0;
