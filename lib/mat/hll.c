@@ -439,15 +439,26 @@ int flatHllMultOpenMP(struct FlatELLMatrix *hll, struct Vector *vec, struct Vect
     return retunrE;
 }
 
+int flatHllMultOpenMPv2(struct FlatELLMatrix *hll, struct Vector *vec, struct Vector *result, double *execTime){
+    double t;
+    t = omp_get_wtime();
+    int retunrE=openMpMultiplyHllFlatV2(hll, vec, result);
+    t = omp_get_wtime() - t;
+    (*execTime) = t; // in seconds
+    return retunrE;
+}
+
 int __attribute__((optimize("O3"))) openMpMultiplyHllFlat(struct FlatELLMatrix *mat, struct Vector *vec, struct Vector *result){
     if (!mat || !vec || !result)
         return -1;
     int hackSize = mat->hack;
+   
     #pragma omp parallel for schedule(static)
     for (int block = 0; block < mat->numBlocks; block++) {
         int block_start = mat->block_offsets[block];
         int max_nnz_per_row = mat->block_nnz[block];
         int rowNumber = mat->block_rows[block];
+        
        for (int j = 0; j < max_nnz_per_row; j++) {
             int flat_idx = block_start + j * rowNumber;
             #pragma omp simd
@@ -461,6 +472,41 @@ int __attribute__((optimize("O3"))) openMpMultiplyHllFlat(struct FlatELLMatrix *
     }
     return 0;
 }
+
+int __attribute__((optimize("O3"))) openMpMultiplyHllFlatV2(struct FlatELLMatrix *mat, struct Vector *vec, struct Vector *result) {
+     if (!mat || !vec || !result)
+        return -1;
+    int hackSize = mat->hack;
+   
+    #pragma omp parallel for schedule(guided)
+    for (int block = 0; block < mat->numBlocks; block++) {
+        int block_start = mat->block_offsets[block];
+        int max_nnz_per_row = mat->block_nnz[block];
+        int rowNumber = mat->block_rows[block];
+        
+       for (int j = 0; j < max_nnz_per_row; j++) {
+            int flat_idx = block_start + j * rowNumber;
+            double molt,val;
+            int i,col;
+            #pragma omp simd private(col, val, molt) 
+            for (int i = 0; i < rowNumber; i++) {
+                  int col = mat->col_indices_flat[flat_idx+i];
+                  double molt = vec->vettore[col];
+                  double val = mat->values_flat[flat_idx+i];
+                  result->vettore[hackSize * block + i] += val * molt;
+            }
+        }
+    }
+    return 0;
+}
+
+
+
+
+
+
+
+
 
 int __attribute__((optimize("O3"))) openMpMultiplyHLL(struct MatriceHLL *mat, struct Vector *vec, struct Vector *result)
 {
