@@ -85,6 +85,7 @@ int convertRawToHll(MatriceRaw *matricePointer, int hackSizeP, MatriceHLL **hll)
 int serialMultiplyHLL(MatriceHLL *mat, Vector *vec, Vector *result);
 int hllMultWithTime(int (*multiplayer)(MatriceHLL *, Vector *, Vector *),
                     MatriceHLL *hll, Vector *vec, Vector *result, double *execTime);
+                    int openMpMultiplyHllFlatFast(struct FlatELLMatrix *mat, struct Vector *vec, struct Vector *result) ;
 int openMpMultiplyHLL(MatriceHLL *mat, Vector *vec, Vector *result);
 int printHLL(MatriceHLL **hllP);
 int freeMatHll(struct MatriceHLL **matricePointer);

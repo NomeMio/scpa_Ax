@@ -284,6 +284,34 @@ int process_matrix(const char *matrix_name, const AppConfig *config,FILE * csv){
         freeRandom(&resultV);
     }
 
+    for(int j=0;j<config->num_thread_counts;j++){
+        int thread=config->thread_counts[j];
+        omp_set_num_threads(thread);
+        struct CsvEntry result;
+        struct Vector *resultV;
+        generateEmpty(rows, &resultV);
+        initializeCsvEntry(&result, matrix_name, "hll", "openMp","faltColumnV2",mat->nz, hack,thread, 0, iterations,0.0,0.0);
+
+        double time = 0;
+        for (int i = 0; i < iterations; i++) {
+            freeRandom(&resultV);
+            generateEmpty(rows, &resultV);
+            flatHllMultOpenMPv2(cudaHllMat, vectorR, resultV, &time);
+            result.measure[i] = 2.0 * mat->nz / (time * 1000000000);
+        }
+        if(areVectorsEqual(resultV,resultSerial)!=0){
+            printf("result hll openMP flat is borken\n");
+        }else{
+            double diff;
+            double percentage;
+            calculate_vector_differences(resultV,resultSerial,&diff,&percentage);
+            result.errorPercentage=percentage;
+            result.errorValue=diff;
+            append_csv_entry(csv,&result);
+        }
+        freeRandom(&resultV);
+    }
+
 //------------------------------CUDA CSR  SERIAL KERNEL-----------------------------//
 for(unsigned int  j=32;j<CUDA_THREADS;j=j*2){
     struct CsvEntry result;
