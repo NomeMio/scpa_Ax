@@ -338,7 +338,7 @@ for(int righePerBlocco=16;righePerBlocco<128;righePerBlocco*=2){
     struct CsvEntry result;
     struct Vector *resultV;
     generateEmpty(rows, &resultV);
-    initializeCsvEntry(&result, matrix_name, "csr", "cuda","warpCostum",mat->nz, miniWarpSize, mat->height*miniWarpSize, righePerBlocco,iterations,0.0,0.0);
+    initializeCsvEntry(&result, matrix_name, "csr", "cuda","warpCostumReduction",mat->nz, miniWarpSize, mat->height*miniWarpSize, righePerBlocco,iterations,0.0,0.0);
 
     double time = 0;
     for (int i = 0; i < iterations; i++) {
