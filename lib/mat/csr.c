@@ -47,7 +47,6 @@ int convertRawToCsr(struct MatriceRaw *matricePointer, struct MatriceCsr **csrPo
     if (*csrPointer == NULL)
         return -1;
     struct MatriceCsr *matrixCsr = *csrPointer;
-    matrixCsr->nz = numeroNz;
     matrixCsr->height = nRighe;
     matrixCsr->width = matricePointer->width;
     matrixCsr->iRP = malloc(sizeof(unsigned int) * (nRighe + 1));
@@ -148,12 +147,11 @@ int coaliscanceMatCsr(MatriceCsr * normale, MatriceCsr **sistemata) {
     MatriceCsr *sistemataP = *sistemata;
     sistemataP->height = normale->height;
     sistemataP->width = normale->width;
-    sistemataP->nz = normale->nz+totalpad; 
     sistemataP->valori = NULL;  
     sistemataP->jValori = NULL;
     sistemataP->iRP = NULL;
 
-    unsigned int total_elements_padded = sistemataP->nz;
+    unsigned int total_elements_padded = normale->iRP[normale->height]+totalpad;
 
     sistemataP->valori = malloc(sizeof(double) * total_elements_padded);
     if (sistemataP->valori == NULL) {

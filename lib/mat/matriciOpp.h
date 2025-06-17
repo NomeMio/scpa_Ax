@@ -36,7 +36,6 @@ int freeMatRaw(MatriceRaw **matricePointer);
 /* Definizione di MatriceCsr */
 typedef struct MatriceCsr {
     unsigned int width, height;
-    unsigned int nz; 
     unsigned int *iRP;      // Array di dimensione height+1
     unsigned int *jValori;  // Array di dimensione nz
     double *valori;         // Array di dimensione nz

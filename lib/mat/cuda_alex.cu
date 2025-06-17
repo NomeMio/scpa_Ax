@@ -89,11 +89,12 @@ void allocateAndCopyMatriceCsrGpu( MatriceCsr *orgi,  MatriceCsr **mat, int coal
     
         size_t size_iRP = (orgi->height + 1) * sizeof(unsigned int);
         if(coal==1){
-            size_iRP=(orgi->height*2 ) * sizeof(unsigned int);
+            size_iRP=(orgi->height*2) * sizeof(unsigned int);
         }
-        size_t size_jValori = orgi->nz * sizeof(unsigned int);
-        size_t size_valori = orgi->nz * sizeof(double);
-    
+        int inxNZ= coal==1?orgi->height*2-1:orgi->height;
+        size_t size_jValori = orgi->iRP[inxNZ] * sizeof(unsigned int);
+        size_t size_valori = orgi->iRP[inxNZ] * sizeof(double);
+        //printf("size %d %d\n",coal,orgi->iRP[inxNZ]);
         CUDA_MALLOC(d_iRP, size_iRP);
         CUDA_MALLOC(d_jValori, size_jValori);
         CUDA_MALLOC(d_valori, size_valori);
